@@ -50,6 +50,10 @@ const initialResult: RunResult = {
 };
 
 export default function Home() {
+  const [sessionStarted, setSessionStarted] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [ecosystem, setEcosystem] = useState<{
     orchestrator: { name: string; humanApprovalRequired: boolean };
     agents: { name: string; domain: string; status: string; authorizedSources: string[] }[];
@@ -72,11 +76,30 @@ export default function Home() {
   const [chatLoading, setChatLoading] = useState(false);
 
   useEffect(() => {
+    setSessionStarted(sessionStorage.getItem("agromind_session") === "active");
     fetch("/api/ecosystem")
       .then((response) => response.ok ? response.json() : null)
       .then((data) => data ? setEcosystem(data) : null)
       .catch(() => setEcosystem(null));
   }, []);
+
+  function enterSession(event: FormEvent) {
+    event.preventDefault();
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      setLoginError("Enter an email address and password.");
+      return;
+    }
+    setLoginError("");
+    sessionStorage.setItem("agromind_session", "active");
+    sessionStorage.setItem("agromind_user", loginEmail.trim());
+    setSessionStarted(true);
+  }
+
+  function endSession() {
+    sessionStorage.removeItem("agromind_session");
+    sessionStorage.removeItem("agromind_user");
+    setSessionStarted(false);
+  }
 
   async function runAgents(event: FormEvent) {
     event.preventDefault();
@@ -136,6 +159,65 @@ export default function Home() {
     }
   }
 
+  if (!sessionStarted) {
+    return (
+      <main className="login-shell">
+        <section className="login-panel" aria-label="AgroMind login">
+          <div className="login-brand">
+            <span className="brandmark">AM</span>
+            <div>
+              <strong>AgroMind AI</strong>
+              <span>Agricultural Intelligence Portal</span>
+            </div>
+          </div>
+          <div className="login-copy">
+            <span className="eyebrow">Secure decision workspace</span>
+            <h1>Sign in to analyze and manage your fields.</h1>
+            <p>Combine verified agricultural evidence with specialist agents and human approval.</p>
+          </div>
+          <form className="login-form" onSubmit={enterSession}>
+            <h2>Welcome back</h2>
+            <div className="field">
+              <label htmlFor="login-email">Email address</label>
+              <input
+                id="login-email"
+                type="email"
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
+                placeholder="name@example.com"
+                autoComplete="email"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="login-password">Password</label>
+              <input
+                id="login-password"
+                type="password"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                placeholder="Enter your password"
+                autoComplete="current-password"
+              />
+            </div>
+            {loginError && <p className="login-error">{loginError}</p>}
+            <button className="primary login-submit" type="submit">Sign in securely</button>
+            <small>Prototype access: any email and password entry starts a local demo session.</small>
+          </form>
+        </section>
+        <aside className="login-proof">
+          <span>Multi-agent evidence ecosystem</span>
+          <ul>
+            <li><strong>Disease</strong> crop-health evidence</li>
+            <li><strong>Irrigation</strong> weather and moisture evidence</li>
+            <li><strong>Resources</strong> soil and nutrient evidence</li>
+            <li><strong>Market</strong> mandi and production evidence</li>
+            <li><strong>Orchestrator</strong> unified conflict-managed plan</li>
+          </ul>
+        </aside>
+      </main>
+    );
+  }
+
   return (
     <main className="shell">
       <div className="govbar">
@@ -162,7 +244,7 @@ export default function Home() {
           <a href="#food-security">Food Security</a>
           <a href="#about">About</a>
         </div>
-        <button className="demo-pill">Authorized Data Gateway</button>
+        <button className="demo-pill" type="button" onClick={endSession}>Log out</button>
       </nav>
 
       <section className="hero" id="platform">
