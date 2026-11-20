@@ -749,6 +749,28 @@ button { cursor: pointer; }
 }
 .dashboard-header-actions { display: flex; gap: 8px; align-items: center; }
 .theme-toggle-dashboard { background: #f7f9f7; }
+.language-select,
+.language-select-dashboard {
+  height: 36px;
+  border: 1px solid #d7ded8;
+  border-radius: 999px;
+  background: white;
+  color: #26362d;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.landing-shell.premium-black .language-select {
+  border-color: #3a3d39;
+  background: #242724;
+  color: #f1f3ef;
+}
+.dashboard-shell.premium-black .language-select-dashboard {
+  border-color: #4a4e48;
+  background: #171917;
+  color: #edf1ec;
+}
 
 .landing-shell.premium-black {
   background: #080908;
@@ -1460,6 +1482,8 @@ button { cursor: pointer; }
 .orchestrator-card article { border: 0; background: white; color: var(--ink); border-radius: 6px; padding: 16px; }
 
 @media (max-width: 900px) {
+  .landing-actions .language-select { display: none; }
+  .language-select-dashboard { max-width: 94px; }
   .floating-chat-launcher { right: 12px; bottom: 12px; min-width: 146px; }
   .floating-chat {
     right: 8px;

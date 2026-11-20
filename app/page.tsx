@@ -26,6 +26,7 @@ const emptyResult: RunResult = {
 
 export default function Home() {
   const [theme, setTheme] = useState<"green" | "black">("green");
+  const [language, setLanguage] = useState<"English" | "हिन्दी" | "తెలుగు">("English");
   const [sessionStarted, setSessionStarted] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -60,6 +61,10 @@ export default function Home() {
 
   useEffect(() => {
     setTheme(localStorage.getItem("agromind_theme") === "black" ? "black" : "green");
+    const savedLanguage = localStorage.getItem("agromind_language");
+    if (savedLanguage === "हिन्दी" || savedLanguage === "తెలుగు" || savedLanguage === "English") {
+      setLanguage(savedLanguage);
+    }
     if (!supabase) {
       setLoginError("Authentication is not configured.");
       return;
@@ -73,6 +78,11 @@ export default function Home() {
     const next = theme === "green" ? "black" : "green";
     setTheme(next);
     localStorage.setItem("agromind_theme", next);
+  }
+
+  function changeLanguage(next: "English" | "हिन्दी" | "తెలుగు") {
+    setLanguage(next);
+    localStorage.setItem("agromind_language", next);
   }
 
   async function enterSession(event: FormEvent) {
@@ -287,6 +297,16 @@ export default function Home() {
             <button type="button" onClick={() => document.querySelector("#landing-about")?.scrollIntoView()}>About Us</button>
           </div>
           <div className="landing-actions">
+            <select
+              className="language-select"
+              value={language}
+              onChange={(event) => changeLanguage(event.target.value as "English" | "हिन्दी" | "తెలుగు")}
+              aria-label="Choose language"
+            >
+              <option>English</option>
+              <option>हिन्दी</option>
+              <option>తెలుగు</option>
+            </select>
             <button className="theme-toggle" type="button" onClick={toggleTheme} aria-label="Switch premium theme">
               {theme === "black" ? "Light" : "Black"}
             </button>
@@ -374,6 +394,16 @@ export default function Home() {
         <header className="dashboard-header">
           <div><span className="eyebrow">AgroMind workspace</span><h1>{navItems.find((item) => item.id === view)?.label}</h1></div>
           <div className="dashboard-header-actions">
+            <select
+              className="language-select-dashboard"
+              value={language}
+              onChange={(event) => changeLanguage(event.target.value as "English" | "हिन्दी" | "తెలుగు")}
+              aria-label="Choose language"
+            >
+              <option>English</option>
+              <option>हिन्दी</option>
+              <option>తెలుగు</option>
+            </select>
             <button className="theme-toggle-dashboard" type="button" onClick={toggleTheme}>{theme === "black" ? "Black" : "Green"} theme</button>
             <button className="header-action" onClick={() => setView("field")}>New analysis</button>
           </div>
