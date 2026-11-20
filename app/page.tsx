@@ -35,6 +35,13 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [activeAgent, setActiveAgent] = useState("Disease");
   const [result, setResult] = useState(emptyResult);
+  const [sourceStatus, setSourceStatus] = useState<Array<{
+    name: string;
+    category: string;
+    url: string;
+    connect: string;
+    status: "connected" | "unavailable";
+  }> | null>(null);
   const [imagePreview, setImagePreview] = useState("");
   const [imageData, setImageData] = useState("");
   const [chatInput, setChatInput] = useState("");
@@ -57,6 +64,10 @@ export default function Home() {
     }
     supabase.auth.getSession().then(({ data }) => setSessionStarted(Boolean(data.session)));
     const { data } = supabase.auth.onAuthStateChange((_event, session) => setSessionStarted(Boolean(session)));
+    fetch("/api/source-status")
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setSourceStatus(data?.sources || null))
+      .catch(() => setSourceStatus(null));
     return () => data.subscription.unsubscribe();
   }, []);
 
@@ -103,6 +114,10 @@ export default function Home() {
   function selectImage(file?: File) {
     if (!file) return;
     if (!file.type.startsWith("image/")) return;
+    if (file.size > 8 * 1024 * 1024) {
+      setLoginError("Image must be smaller than 8 MB.");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const value = String(reader.result);
@@ -283,6 +298,15 @@ export default function Home() {
           {view === "evidence" && (
             <article className="panel evidence-panel">
               <div className="panel-title"><span className="eyebrow">Evidence registry</span><h2>Authorized source status</h2></div>
+              {sourceStatus?.map((source) => (
+                <div className="evidence-row" key={source.name}>
+                  <div>
+                    <strong>{source.name}</strong>
+                    <small>{source.category} · {source.status === "connected" ? "Connected" : "Unavailable"} · {source.connect}</small>
+                  </div>
+                  <a href={source.url} target="_blank" rel="noreferrer">Open source</a>
+                </div>
+              ))}
               {result.sources.map((source) => <div className="evidence-row" key={source.name}><div><strong>{source.name}</strong><small>{source.status === "authorized" ? "Connected and requested" : "Not connected or unavailable"}</small></div>{source.url && <a href={source.url} target="_blank" rel="noreferrer">Open source</a>}</div>)}
             </article>
           )}

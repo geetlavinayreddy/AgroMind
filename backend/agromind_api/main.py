@@ -47,6 +47,39 @@ AUTHORIZED_DOMAINS = {
     "disease": {"krishi-dss.gov.in"},
 }
 
+SOURCE_REGISTRY = [
+    {
+        "name": "Open-Meteo",
+        "category": "Weather",
+        "url": "https://open-meteo.com/",
+        "connect": "Public API",
+    },
+    {
+        "name": "data.gov.in",
+        "category": "Mandi and production",
+        "url": "https://www.data.gov.in/",
+        "connect": "Requires API key",
+    },
+    {
+        "name": "AGMARKNET",
+        "category": "Daily mandi prices",
+        "url": "https://agmarknet.gov.in/",
+        "connect": "Via authorized data.gov.in resource",
+    },
+    {
+        "name": "Krishi DSS",
+        "category": "Crop and disease context",
+        "url": "https://krishi-dss.gov.in/",
+        "connect": "Requires configured project endpoint",
+    },
+    {
+        "name": "Soil Health Card",
+        "category": "Soil and nutrient evidence",
+        "url": "https://soilhealth.dac.gov.in/",
+        "connect": "Requires configured authorized API",
+    },
+]
+
 AGENT_REGISTRY = {
     "Disease": {"domain": "disease", "sources": ["Krishi DSS"]},
     "Irrigation": {"domain": "weather", "sources": ["Open-Meteo", "IMD gateway"]},
@@ -312,6 +345,26 @@ async def ecosystem_status() -> dict[str, Any]:
             "humanApprovalRequired": True,
         },
         "agents": agent_statuses,
+    }
+
+
+@app.get("/api/source-status")
+async def source_status() -> dict[str, Any]:
+    connected_by_name = {
+        "Open-Meteo": True,
+        "data.gov.in": bool(os.getenv("DATA_GOV_IN_API_KEY")),
+        "AGMARKNET": bool(os.getenv("DATA_GOV_IN_API_KEY")),
+        "Krishi DSS": bool(os.getenv("KRISHI_DSS_API_URL")),
+        "Soil Health Card": bool(os.getenv("SOIL_HEALTH_API_URL")),
+    }
+    return {
+        "sources": [
+            {
+                **source,
+                "status": "connected" if connected_by_name[source["name"]] else "unavailable",
+            }
+            for source in SOURCE_REGISTRY
+        ]
     }
 
 

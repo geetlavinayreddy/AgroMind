@@ -61,3 +61,16 @@ def test_ecosystem_reports_all_agents_and_orchestrator() -> None:
         "Resources",
         "Market",
     ]
+
+
+def test_source_status_lists_all_authorized_sources() -> None:
+    response = client.get("/api/source-status")
+    assert response.status_code == 200
+    names = {source["name"] for source in response.json()["sources"]}
+    assert names == {
+        "Open-Meteo",
+        "data.gov.in",
+        "AGMARKNET",
+        "Krishi DSS",
+        "Soil Health Card",
+    }
