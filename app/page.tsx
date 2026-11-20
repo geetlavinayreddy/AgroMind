@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
 
 type View = "overview" | "disease" | "field" | "collaboration" | "evidence" | "assistant";
@@ -42,6 +42,13 @@ export default function Home() {
   const [chatMessages, setChatMessages] = useState([
     { role: "assistant", text: "Ask about this field, a symptom, irrigation, soil or a mandi." },
   ]);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatPosition, setChatPosition] = useState<{ x: number; y: number } | null>(null);
+  const chatDrag = useRef<{ active: boolean; dx: number; dy: number }>({
+    active: false,
+    dx: 0,
+    dy: 0,
+  });
   const [form, setForm] = useState({
     crop: "Tomato",
     district: "Anantapur",
@@ -204,16 +211,88 @@ export default function Home() {
     }
   }
 
+  function startChatDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const panel = event.currentTarget.closest(".floating-chat") as HTMLDivElement | null;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    chatDrag.current = {
+      active: true,
+      dx: event.clientX - rect.left,
+      dy: event.clientY - rect.top,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveChatDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!chatDrag.current.active) return;
+    const panelWidth = 380;
+    const panelHeight = 520;
+    const x = Math.max(8, Math.min(window.innerWidth - panelWidth - 8, event.clientX - chatDrag.current.dx));
+    const y = Math.max(8, Math.min(window.innerHeight - panelHeight - 8, event.clientY - chatDrag.current.dy));
+    setChatPosition({ x, y });
+  }
+
+  function stopChatDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    chatDrag.current.active = false;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
+  function renderFloatingChat() {
+    const positionStyle = chatPosition
+      ? { left: `${chatPosition.x}px`, top: `${chatPosition.y}px`, bottom: "auto", right: "auto" }
+      : undefined;
+    return chatOpen ? (
+      <aside
+        className="floating-chat"
+        style={positionStyle}
+        aria-label="Movable AgroMind AI assistant"
+      >
+        <header
+          className="floating-chat-header"
+          onPointerDown={startChatDrag}
+          onPointerMove={moveChatDrag}
+          onPointerUp={stopChatDrag}
+        >
+          <div><span className="chat-avatar">AM</span><div><strong>AgroMind Assistant</strong><small>Live agricultural copilot</small></div></div>
+          <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => setChatOpen(false)} aria-label="Close assistant">×</button>
+        </header>
+        <div className="floating-chat-messages">
+          {chatMessages.map((message, index) => (
+            <div className={`chat-message ${message.role}`} key={index}>{message.text}</div>
+          ))}
+        </div>
+        <form className="floating-chat-form" onSubmit={sendChat}>
+          <input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="Ask about your field..." />
+          <button type="submit" aria-label="Send message">↗</button>
+        </form>
+      </aside>
+    ) : (
+      <button className="floating-chat-launcher" type="button" onClick={() => setChatOpen(true)}>
+        <span>✦</span><strong>Ask AgroMind</strong>
+      </button>
+    );
+  }
+
   if (!sessionStarted) {
     return (
       <main className={`landing-shell ${theme === "black" ? "premium-black" : ""}`}>
-        <nav className="landing-nav">
-          <button className="landing-brand" type="button" onClick={() => document.querySelector("#landing-auth")?.scrollIntoView()}><span>AM</span><strong>AgroMind</strong></button>
-          <div className="landing-links"><button type="button">Home</button><button type="button" onClick={() => document.querySelector("#landing-services")?.scrollIntoView()}>Services</button><button type="button" onClick={() => document.querySelector("#landing-agents")?.scrollIntoView()}>AI Agents</button><button type="button" onClick={() => document.querySelector("#landing-about")?.scrollIntoView()}>About</button></div>
-          <button className="landing-login" type="button" onClick={() => document.querySelector("#landing-auth")?.scrollIntoView()}>Sign in <span>→</span></button>
-          <button className="theme-toggle" type="button" onClick={toggleTheme} aria-label="Switch premium theme">
-            {theme === "black" ? "Light" : "Black"}
-          </button>
+        <nav className="landing-nav" id="landing-home">
+          <button className="landing-brand" type="button" onClick={() => document.querySelector("#landing-home")?.scrollIntoView()}><span>AM</span><strong>AgroMind AI</strong></button>
+          <div className="landing-links">
+            <button type="button" onClick={() => document.querySelector("#landing-home")?.scrollIntoView()}>Home</button>
+            <button type="button" onClick={() => document.querySelector("#landing-services")?.scrollIntoView()}>Features</button>
+            <button type="button" onClick={() => document.querySelector("#landing-agents")?.scrollIntoView()}>AI Agents</button>
+            <button type="button" onClick={() => document.querySelector("#landing-how")?.scrollIntoView()}>How It Works</button>
+            <button type="button" onClick={() => document.querySelector("#landing-food")?.scrollIntoView()}>Food Security</button>
+            <button type="button" onClick={() => document.querySelector("#landing-about")?.scrollIntoView()}>About Us</button>
+          </div>
+          <div className="landing-actions">
+            <button className="theme-toggle" type="button" onClick={toggleTheme} aria-label="Switch premium theme">
+              {theme === "black" ? "Light" : "Black"}
+            </button>
+            <button className="landing-login-secondary" type="button" onClick={() => document.querySelector("#landing-auth")?.scrollIntoView()}>Login</button>
+            <button className="landing-login" type="button" onClick={() => document.querySelector("#landing-auth")?.scrollIntoView()}>Get Started <span>→</span></button>
+          </div>
         </nav>
         <section className="landing-hero">
           <div className="landing-shade" />
@@ -241,6 +320,17 @@ export default function Home() {
           <article><span>Resources</span><strong>Soil guidance</strong><small>Lab-first nutrient planning</small></article>
           <article id="landing-about"><span>Market</span><strong>Mandi context</strong><small>Harvest and price evidence</small></article>
         </section>
+        <section className="landing-how" id="landing-how">
+          <article><span>01</span><strong>Submit field data</strong><small>Crop, district, soil and observed symptoms</small></article>
+          <article><span>02</span><strong>Agents analyze</strong><small>Each specialist reviews its own evidence</small></article>
+          <article><span>03</span><strong>Orchestrator reconciles</strong><small>Conflicts and risks are identified</small></article>
+          <article><span>04</span><strong>Farmer remains in control</strong><small>Review, approve and track locally</small></article>
+        </section>
+        <section className="landing-food" id="landing-food">
+          <span>Food Security</span>
+          <h2>Community insights with farmer privacy.</h2>
+          <p>Regional crop availability and production context support cooperatives without exposing individual parcel data.</p>
+        </section>
         <section className="landing-auth" id="landing-auth">
           <form className="login-form" onSubmit={enterSession}>
             <span className="eyebrow">Secure workspace</span>
@@ -252,6 +342,7 @@ export default function Home() {
             <button type="button" className="auth-mode-button" onClick={() => setAuthMode(authMode === "sign-up" ? "sign-in" : "sign-up")}>{authMode === "sign-up" ? "Already registered? Sign in" : "New here? Create an account"}</button>
           </form>
         </section>
+        {renderFloatingChat()}
       </main>
     );
   }
@@ -445,6 +536,7 @@ export default function Home() {
           )}
         </div>
       </section>
+      {renderFloatingChat()}
     </main>
   );
 }
