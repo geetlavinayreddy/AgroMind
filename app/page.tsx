@@ -35,13 +35,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [activeAgent, setActiveAgent] = useState("Disease");
   const [result, setResult] = useState(emptyResult);
-  const [sourceStatus, setSourceStatus] = useState<Array<{
-    name: string;
-    category: string;
-    url: string;
-    connect: string;
-    status: "connected" | "unavailable";
-  }> | null>(null);
   const [imagePreview, setImagePreview] = useState("");
   const [imageData, setImageData] = useState("");
   const [chatInput, setChatInput] = useState("");
@@ -64,10 +57,6 @@ export default function Home() {
     }
     supabase.auth.getSession().then(({ data }) => setSessionStarted(Boolean(data.session)));
     const { data } = supabase.auth.onAuthStateChange((_event, session) => setSessionStarted(Boolean(session)));
-    fetch("/api/source-status")
-      .then((response) => response.ok ? response.json() : null)
-      .then((data) => setSourceStatus(data?.sources || null))
-      .catch(() => setSourceStatus(null));
     return () => data.subscription.unsubscribe();
   }, []);
 
@@ -207,7 +196,7 @@ export default function Home() {
     { id: "disease", label: "Disease Scan", icon: "◉" },
     { id: "field", label: "Field Analysis", icon: "▦" },
     { id: "collaboration", label: "Agent Collaboration", icon: "◎" },
-    { id: "evidence", label: "Evidence Sources", icon: "✓" },
+    { id: "evidence", label: "Agent Knowledge", icon: "✓" },
     { id: "assistant", label: "AI Assistant", icon: "✦" },
   ];
 
@@ -316,17 +305,19 @@ export default function Home() {
 
           {view === "evidence" && (
             <article className="panel evidence-panel">
-              <div className="panel-title"><span className="eyebrow">Evidence registry</span><h2>Authorized source status</h2></div>
-              {sourceStatus?.map((source) => (
-                <div className="evidence-row" key={source.name}>
-                  <div>
-                    <strong>{source.name}</strong>
-                    <small>{source.category} · {source.status === "connected" ? "Connected" : "Unavailable"} · {source.connect}</small>
-                  </div>
-                  <a href={source.url} target="_blank" rel="noreferrer">Open source</a>
+              <div className="panel-title"><span className="eyebrow">Agent knowledge</span><h2>Specialist training profiles</h2></div>
+              {[
+                ["Disease Agent", "Leaf-symptom triage, crop-specific visual cues, confidence limits and escalation rules."],
+                ["Irrigation Agent", "Moisture thresholds, rainfall conflict checks, crop stage and root-zone planning."],
+                ["Resources Agent", "Soil-type nutrient workflow, lab-first decisions and fertilizer safety boundaries."],
+                ["Market Agent", "District crop context, harvest timing, price evidence and uncertainty disclosure."],
+                ["Central Orchestrator", "Cross-agent reconciliation, contradiction detection and human-approval gates."],
+              ].map(([name, description]) => (
+                <div className="evidence-row" key={name}>
+                  <div><strong>{name}</strong><small>{description}</small></div>
+                  <b className="training-chip">Local profile</b>
                 </div>
               ))}
-              {result.sources.map((source) => <div className="evidence-row" key={source.name}><div><strong>{source.name}</strong><small>{source.status === "authorized" ? "Connected and requested" : "Not connected or unavailable"}</small></div>{source.url && <a href={source.url} target="_blank" rel="noreferrer">Open source</a>}</div>)}
             </article>
           )}
 

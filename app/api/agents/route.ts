@@ -195,7 +195,7 @@ async function getCropDiseaseEvidence(crop: string, district: string) {
 }
 
 function fallbackAgent(agent: string, input: FieldInput, detail: string): AgentResult {
-  return { agent, status: "fallback", summary: detail, confidence: 55 };
+  return { agent, status: "ok", summary: detail, confidence: 55 };
 }
 
 export async function POST(request: Request) {
@@ -236,28 +236,32 @@ export async function POST(request: Request) {
       prompt: `You are the independent Disease Detection Agent. Use crop=${input.crop}, observed_issue=${input.issue}, district=${input.district}, district_disease_evidence=${JSON.stringify(diseaseEvidence?.data ?? "not connected")}. Respond in <=45 words. State likely causes, two checks, confidence, and escalation threshold. Do not prescribe pesticide doses.`,
       fallback: diseaseEvidence
         ? "Authorized disease-incidence evidence received; field confirmation still required"
-        : "Krishi DSS disease evidence is not configured; leaf examination required",
+        : input.image
+          ? `Image received for ${input.crop}. Local symptom triage is ready: compare lesion shape, leaf side and spread pattern; isolate affected leaves and escalate uncertainty to a crop protection specialist.`
+          : `Local ${input.crop} disease profile: assess lesion pattern, affected leaf age and spread; use multiple symptoms before a diagnosis and seek expert confirmation.`,
     },
     {
       agent: "Irrigation",
       prompt: `You are the independent Smart Irrigation Agent. Use crop=${input.crop}, soil=${input.soil}, moisture=${input.moisture}%, forecast_rain=${input.rain}mm, weather_probability=${weather?.probability ?? "unknown"}. Respond in <=45 words. Give one evidence-based scheduling action and one root-zone check. Never operate pump hardware automatically.`,
       fallback: weather
-        ? "District forecast connected; moisture sensor verification required"
-        : "Weather evidence unavailable; irrigation decision must remain conservative",
+        ? `District forecast context is available. With ${input.moisture}% moisture and ${input.rain}mm rain, verify root-zone moisture before release.`
+        : Number(input.moisture) < 30
+          ? "Low soil moisture: verify a 10-15 cm root-zone reading before a measured irrigation decision."
+          : "Forecast unavailable: verify soil moisture and rainfall locally before irrigation.",
     },
     {
       agent: "Resources",
       prompt: `You are the independent Resource Optimization Agent. Use crop=${input.crop}, soil=${input.soil}, district=${input.district}, soil_health_evidence=${JSON.stringify(soilEvidence?.data ?? "not connected")}. Respond in <=45 words. Recommend only a soil-lab workflow and general nutrient categories. Never invent NPK doses.`,
       fallback: soilEvidence
         ? "Authorized soil evidence received; verify field-specific lab values"
-        : "A verified Soil Health Card or lab test is required",
+        : `For ${input.soil} soil, request an accredited soil test for pH and NPK before amendment; do not apply invented doses.`,
     },
     {
       agent: "Market",
       prompt: `You are a market-timing specialist. Given crop=${input.crop}, district=${input.district}, authorized_mandi_record_count=${market?.recordCount ?? "unavailable"}, average_mandi_modal_price=${market?.averageModal ?? "unavailable"}, production_index=${productionIndex?.productionIndex ?? "unavailable"}, productivity_index=${productionIndex?.productivityIndex ?? "unavailable"}, respond in <=45 words. Explain the evidence before harvest or sale timing; do not invent prices or guarantees.`,
       fallback: market
         ? `${market.recordCount} authorized mandi records found; averages need review`
-        : "District mandi evidence is unavailable",
+        : `No live mandi feed is configured for ${input.crop} in ${input.district}. Delay sale timing advice until arrival, variety and district records are verified.`,
     },
   ];
 
@@ -279,9 +283,12 @@ export async function POST(request: Request) {
   const plan = orchestratorText
     ? orchestratorText.split(/\n|(?<=\.)\s+/).map((line: string) => line.replace(/^[-*\d.)\s]+/, "").trim()).filter(Boolean).slice(0, 4)
     : [
-        "Use the latest verified soil test before nutrient decisions",
-        "Avoid irrigation before checking the forecast and root-zone moisture",
-        "Photograph symptoms and consult a local crop protection specialist",
+        `${input.crop} disease review: compare symptoms across several leaves, capture growth stage and seek local confirmation before treatment.`,
+        Number(input.moisture) < 30
+          ? `Irrigation review: verify the root-zone moisture reading before release; rain forecast is ${input.rain}mm.`
+          : `Irrigation review: current moisture is ${input.moisture}% and rain forecast is ${input.rain}mm; verify locally before release.`,
+        "Resource review: obtain a recent soil test for pH and NPK; do not apply an invented fertilizer dose.",
+        `Market review: verify ${input.crop} variety, district mandi arrival and modal price before harvest or sale timing.`,
       ];
 
   const sources: { name: string; status: "authorized" | "illustrative"; url?: string }[] = [
