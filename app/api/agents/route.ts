@@ -67,8 +67,10 @@ async function getWeather(district: string) {
 
 async function getAuthorizedMarket(crop: string, district: string) {
   const key = process.env.DATA_GOV_IN_API_KEY;
-  const resource = process.env.AGMARKNET_RESOURCE_ID;
-  if (!key || !resource) return null;
+  const resource =
+    process.env.AGMARKNET_RESOURCE_ID ||
+    "9ef84268-d588-465a-a308-a864a43d0070";
+  if (!key) return null;
   try {
     const url =
       `https://api.data.gov.in/resource/${resource}?api-key=${encodeURIComponent(key)}&format=json` +
@@ -76,7 +78,53 @@ async function getAuthorizedMarket(crop: string, district: string) {
     const response = await fetch(url, { cache: "no-store" });
     if (!response.ok) return null;
     const data = await response.json();
-    return { name: "data.gov.in Agmarknet", recordCount: data.records?.length || 0 };
+    const records = data.records || [];
+    const modalPrices = records
+      .map((record: Record<string, unknown>) =>
+        Number(record.modal_price ?? record.modalprice ?? record["Modal Price"]),
+      )
+      .filter((value: number) => Number.isFinite(value));
+    const averageModal =
+      modalPrices.length > 0
+        ? modalPrices.reduce((sum: number, value: number) => sum + value, 0) / modalPrices.length
+        : null;
+    return {
+      name: "data.gov.in - Current Daily Price of Various Commodities",
+      recordCount: records.length,
+      averageModal,
+      latestDate:
+        records[0]?.arrival_date ?? records[0]?.date ?? records[0]?.["Arrival Date"] ?? null,
+      sourceUrl: `https://www.data.gov.in/resource/${resource}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getProductionIndex(crop: string) {
+  const url =
+    process.env.AGRICULTURAL_INDEX_URL ||
+    "https://www.data.gov.in/files/ogdpv2dms/s3fs-public/datafile/index_numbers_of_agricultural_production_and_productivity_2006-07_2009.csv";
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return null;
+    const text = await response.text();
+    const rows = text
+      .split(/\r?\n/)
+      .map((line) => line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, "")))
+      .filter((row) => row.length >= 3);
+    const cropKey = crop.toLowerCase();
+    const row =
+      rows.find((item) => item[1].toLowerCase().includes(cropKey)) ||
+      rows.find((item) => item[1].toLowerCase().includes("all crops"));
+    if (!row) return null;
+    return {
+      name: "Index Numbers of Agricultural Production and Productivity",
+      group: row[1],
+      productionIndex: Number(row[2]),
+      productivityIndex: Number(row[3]),
+      sourceUrl: "https://www.data.gov.in/files/ogdpv2dms/s3fs-public/datafile/index_numbers_of_agricultural_production_and_productivity_2006-07_2009.csv",
+    };
   } catch {
     return null;
   }
@@ -96,6 +144,7 @@ export async function POST(request: Request) {
 
   const weather = await getWeather(input.district);
   const market = await getAuthorizedMarket(input.crop, input.district);
+  const productionIndex = await getProductionIndex(input.crop);
 
   const specialists = [
     {
@@ -115,8 +164,10 @@ export async function POST(request: Request) {
     },
     {
       agent: "Market",
-      prompt: `You are a market-timing specialist. Given crop=${input.crop}, district=${input.district}, authorized_mandi_record_count=${market?.recordCount ?? "unavailable"}, respond in <=45 words. Explain which evidence is still needed before harvest or sale timing.`,
-      fallback: "District mandi evidence is unavailable",
+      prompt: `You are a market-timing specialist. Given crop=${input.crop}, district=${input.district}, authorized_mandi_record_count=${market?.recordCount ?? "unavailable"}, average_mandi_modal_price=${market?.averageModal ?? "unavailable"}, production_index=${productionIndex?.productionIndex ?? "unavailable"}, productivity_index=${productionIndex?.productivityIndex ?? "unavailable"}, respond in <=45 words. Explain the evidence before harvest or sale timing; do not invent prices or guarantees.`,
+      fallback: market
+        ? `${market.recordCount} authorized mandi records found; averages need review`
+        : "District mandi evidence is unavailable",
     },
   ];
 
@@ -145,7 +196,10 @@ export async function POST(request: Request) {
 
   const sources: { name: string; status: "authorized" | "illustrative" }[] = [
     weather ? { name: weather.name, status: "authorized" } : { name: "District weather", status: "illustrative" },
-    market ? { name: market.name, status: "authorized" } : { name: "Agmarknet mandi prices", status: "illustrative" },
+    market ? { name: market.name, status: "authorized" } : { name: "Agmarknet variety-wise daily prices", status: "illustrative" },
+    productionIndex
+      ? { name: productionIndex.name, status: "authorized" }
+      : { name: "Agricultural production and productivity index", status: "illustrative" },
   ];
 
   return NextResponse.json({
@@ -156,5 +210,16 @@ export async function POST(request: Request) {
     ],
     agents,
     sources,
+    evidence: {
+      market: market
+        ? {
+            recordCount: market.recordCount,
+            averageModal: market.averageModal,
+            latestDate: market.latestDate,
+            sourceUrl: market.sourceUrl,
+          }
+        : null,
+      productionIndex,
+    },
   });
 }

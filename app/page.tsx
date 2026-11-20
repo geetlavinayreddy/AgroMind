@@ -14,6 +14,21 @@ type RunResult = {
   warnings: string[];
   agents: AgentResult[];
   sources: { name: string; status: "authorized" | "illustrative" }[];
+  evidence?: {
+    market?: {
+      recordCount: number;
+      averageModal: number | null;
+      latestDate: string | null;
+      sourceUrl: string;
+    } | null;
+    productionIndex?: {
+      name: string;
+      group: string;
+      productionIndex: number;
+      productivityIndex: number;
+      sourceUrl: string;
+    } | null;
+  };
 };
 
 const initialResult: RunResult = {
@@ -171,6 +186,28 @@ export default function Home() {
                   <small>{source.status === "authorized" ? "Authorized source" : "Illustrative or unavailable"}</small>
                 </div>
               ))}
+              {result.evidence?.market && (
+                <div className="source">
+                  <strong>Variety-wise mandi evidence</strong><br />
+                  <small>
+                    {result.evidence.market.recordCount} records
+                    {result.evidence.market.averageModal !== null
+                      ? ` · average modal price ₹${result.evidence.market.averageModal.toFixed(0)}`
+                      : ""}
+                    {result.evidence.market.latestDate ? ` · ${result.evidence.market.latestDate}` : ""}
+                  </small>
+                </div>
+              )}
+              {result.evidence?.productionIndex && (
+                <div className="source">
+                  <strong>National production index</strong><br />
+                  <small>
+                    {result.evidence.productionIndex.group}: production{" "}
+                    {result.evidence.productionIndex.productionIndex}, productivity{" "}
+                    {result.evidence.productionIndex.productivityIndex}
+                  </small>
+                </div>
+              )}
             </aside>
           </div>
         </div>
