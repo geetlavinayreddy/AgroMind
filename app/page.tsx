@@ -288,9 +288,28 @@ export default function Home() {
                   );
                 })}
               </div>
-              <div className="two-column">
-                <article className="panel"><div className="panel-title"><span className="eyebrow">Unified result</span><h2>Coordinated action plan</h2></div><ul className="plan-list">{result.plan.map((item) => <li key={item}>{item}</li>)}</ul>{result.warnings.map((item) => <p className="warning" key={item}>! {item}</p>)}</article>
-                <article className="panel"><div className="panel-title"><span className="eyebrow">Specialist outputs</span><h2>Agent responses</h2></div>{result.agents.map((agent) => <div className="agent-response" key={agent.agent}><strong>{agent.agent}</strong><span>{agent.status}</span><p>{agent.summary}</p></div>)}</article>
+              <div className="specialist-grid">
+                {[
+                  { name: "Disease", icon: "◉", input: "Crop image · symptoms", output: "Likely cause · confidence · escalation", handoff: "Irrigation · Resources · Orchestrator" },
+                  { name: "Irrigation", icon: "≈", input: "Moisture · rainfall · crop stage", output: "Water timing · root-zone check", handoff: "Disease · Resources · Orchestrator" },
+                  { name: "Resources", icon: "◇", input: "Soil type · district · soil test", output: "Nutrient workflow · cost signal", handoff: "Irrigation · Market · Orchestrator" },
+                  { name: "Market", icon: "⌁", input: "Crop · district · production index", output: "Mandi evidence · harvest context", handoff: "Resources · Orchestrator" },
+                ].map((agent) => {
+                  const response = result.agents.find((item) => item.agent === agent.name);
+                  const working = loading && activeAgent === agent.name;
+                  return (
+                    <article className={`specialist-card ${working ? "working" : ""}`} key={agent.name}>
+                      <div className="specialist-head"><span>{agent.icon}</span><div><small>Independent specialist</small><h3>{agent.name}</h3></div><b className={response?.status === "ok" ? "connected" : ""}>{working ? "Running" : response?.status === "ok" ? "Responded" : "Fallback"}</b></div>
+                      <div className="specialist-input"><strong>Receives</strong><span>{agent.input}</span></div>
+                      <div className="specialist-output"><strong>Produces</strong><p>{working ? "Requesting verified evidence and preparing a response..." : response?.summary || "Waiting for analysis."}</p><small>{agent.output}</small></div>
+                      <div className="handoff-line"><strong>Handoff</strong><span>{agent.handoff}</span></div>
+                    </article>
+                  );
+                })}
+              </div>
+              <div className="orchestrator-card">
+                <div><span>◎</span><div><small>Final reconciliation</small><h3>Central Orchestrator</h3></div></div>
+                <article><div className="panel-title"><span className="eyebrow">Unified result</span><h2>Coordinated action plan</h2></div><ul className="plan-list">{result.plan.map((item) => <li key={item}>{item}</li>)}</ul>{result.warnings.map((item) => <p className="warning" key={item}>! {item}</p>)}</article>
               </div>
             </div>
           )}
