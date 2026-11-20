@@ -79,6 +79,15 @@ button { cursor: pointer; }
 .login-form .field { margin-bottom: 14px; }
 .login-form input { background: white; height: 46px; }
 .login-submit { width: 100%; margin-top: 4px; }
+.auth-mode-button {
+  width: 100%;
+  margin-top: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+}
 .login-form small {
   display: block;
   margin-top: 12px;

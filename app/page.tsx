@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { supabase } from "./lib/supabase";
 
 type AgentResult = {
   agent: string;
@@ -54,6 +55,8 @@ export default function Home() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authMode, setAuthMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [ecosystem, setEcosystem] = useState<{
     orchestrator: { name: string; humanApprovalRequired: boolean };
     agents: { name: string; domain: string; status: string; authorizedSources: string[] }[];
@@ -76,28 +79,71 @@ export default function Home() {
   const [chatLoading, setChatLoading] = useState(false);
 
   useEffect(() => {
-    setSessionStarted(sessionStorage.getItem("agromind_session") === "active");
+    if (!supabase) {
+      setSessionStarted(false);
+      setLoginError("Authentication is not configured.");
+      return;
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      setSessionStarted(Boolean(data.session));
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSessionStarted(Boolean(session));
+    });
+
     fetch("/api/ecosystem")
       .then((response) => response.ok ? response.json() : null)
       .then((data) => data ? setEcosystem(data) : null)
       .catch(() => setEcosystem(null));
+
+    return () => data.subscription.unsubscribe();
   }, []);
 
-  function enterSession(event: FormEvent) {
+  async function enterSession(event: FormEvent) {
     event.preventDefault();
+    if (!supabase) {
+      setLoginError("Authentication is not configured.");
+      return;
+    }
+    if (!loginEmail.trim() || loginPassword.length < 8) {
+      setLoginError("Enter a valid email and a password with at least 8 characters.");
+      return;
+    }
+
+    setAuthBusy(true);
+    setLoginError("");
+    const result =
+      authMode === "sign-up"
+        ? await supabase.auth.signUp({
+            email: loginEmail.trim(),
+            password: loginPassword,
+            options: { emailRedirectTo: window.location.origin },
+          })
+        : await supabase.auth.signInWithPassword({
+            email: loginEmail.trim(),
+            password: loginPassword,
+          });
+    setAuthBusy(false);
+
+    if (result.error) {
+      setLoginError(result.error.message);
+      return;
+    }
+    if (authMode === "sign-up" && !result.data.session) {
+      setLoginError("Account created. Check your email to confirm it, then sign in.");
+      setAuthMode("sign-in");
+      return;
+    }
+    setSessionStarted(Boolean(result.data.session));
     if (!loginEmail.trim() || !loginPassword.trim()) {
       setLoginError("Enter an email address and password.");
       return;
     }
-    setLoginError("");
-    sessionStorage.setItem("agromind_session", "active");
-    sessionStorage.setItem("agromind_user", loginEmail.trim());
-    setSessionStarted(true);
   }
 
-  function endSession() {
-    sessionStorage.removeItem("agromind_session");
-    sessionStorage.removeItem("agromind_user");
+  async function endSession() {
+    await supabase?.auth.signOut();
     setSessionStarted(false);
   }
 
@@ -176,7 +222,7 @@ export default function Home() {
             <p>Combine verified agricultural evidence with specialist agents and human approval.</p>
           </div>
           <form className="login-form" onSubmit={enterSession}>
-            <h2>Welcome back</h2>
+            <h2>{authMode === "sign-up" ? "Create your account" : "Welcome back"}</h2>
             <div className="field">
               <label htmlFor="login-email">Email address</label>
               <input
@@ -200,8 +246,25 @@ export default function Home() {
               />
             </div>
             {loginError && <p className="login-error">{loginError}</p>}
-            <button className="primary login-submit" type="submit">Sign in securely</button>
-            <small>Prototype access: any email and password entry starts a local demo session.</small>
+            <button className="primary login-submit" type="submit" disabled={authBusy}>
+              {authBusy
+                ? "Please wait..."
+                : authMode === "sign-up"
+                  ? "Create account"
+                  : "Sign in securely"}
+            </button>
+            <button
+              className="auth-mode-button"
+              type="button"
+              onClick={() => {
+                setLoginError("");
+                setAuthMode(authMode === "sign-up" ? "sign-in" : "sign-up");
+              }}
+            >
+              {authMode === "sign-up"
+                ? "Already registered? Sign in"
+                : "New here? Create an account"}
+            </button>
           </form>
         </section>
         <aside className="login-proof">
