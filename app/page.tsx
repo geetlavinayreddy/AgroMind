@@ -223,10 +223,41 @@ export default function Home() {
         <div className="view-stage" key={view}>
           {view === "overview" && (
             <div className="overview-grid">
-              <article className="hero-card"><span>Field decision center</span><h2>One field. Five coordinated agents.</h2><p>Run a disease scan, inspect live evidence and receive one governed plan.</p><button className="primary" onClick={() => setView("disease")}>Scan a crop</button></article>
-              <article className="metric-card"><span>Connected agents</span><strong>5</strong><small>Disease · Irrigation · Resources · Market · Orchestrator</small></article>
-              <article className="metric-card"><span>Last action</span><strong>{loading ? "Running" : "Ready"}</strong><small>Human approval required</small></article>
-              <article className="action-card"><h3>Recommended workflow</h3><ol><li>Upload a leaf image</li><li>Enter district and soil context</li><li>Run specialist collaboration</li><li>Review evidence and approve locally</li></ol></article>
+              <article className="hero-card">
+                <div className="hero-card-overlay">
+                  <span>Field decision center</span>
+                  <h2>One field. Five coordinated agents.</h2>
+                  <p>Scan a crop, reconcile field conditions and receive one governed plan.</p>
+                  <button className="primary" onClick={() => setView("disease")}>Scan a crop</button>
+                </div>
+              </article>
+              <article className="metric-card weather-card">
+                <span>Field weather</span><strong>28°C</strong>
+                <div className="mini-bars" aria-label="Rain forecast">{[42,58,76,64,35].map((height, index) => <i key={index} style={{ height: `${height}%` }} />)}</div>
+                <small>18 mm forecast · next 24 hours</small>
+              </article>
+              <article className="metric-card moisture-card">
+                <span>Root-zone moisture</span><strong>22%</strong>
+                <div className="moisture-ring"><i>Low</i></div>
+                <small>Measurement: 22 cm depth</small>
+              </article>
+              <article className="action-card">
+                <div className="action-card-head"><h3>Today’s field workflow</h3><b>4 steps</b></div>
+                <div className="workflow-steps">
+                  <button onClick={() => setView("disease")}><span>1</span><strong>Crop scan</strong><small>Image and symptoms</small></button>
+                  <button onClick={() => setView("field")}><span>2</span><strong>Field context</strong><small>Soil and weather</small></button>
+                  <button onClick={() => setView("collaboration")}><span>3</span><strong>Agent review</strong><small>Specialist handoffs</small></button>
+                  <button onClick={() => runAgents()}><span>4</span><strong>Run plan</strong><small>Human approval</small></button>
+                </div>
+              </article>
+              <article className="field-map-card">
+                <div className="field-map-head"><div><span>Live parcel</span><strong>Anantapur · Plot 07</strong></div><b>12.4 acres</b></div>
+                <div className="field-map" aria-label="Stylized field map">
+                  <div className="field-row row-a" /><div className="field-row row-b" /><div className="field-row row-c" />
+                  <span className="field-pin pin-a">A1</span><span className="field-pin pin-b">A2</span><span className="field-pin pin-c">A3</span>
+                </div>
+                <div className="field-map-legend"><span><i className="healthy" />Healthy</span><span><i className="watch" />Monitor</span><span><i className="dry" />Dry zone</span></div>
+              </article>
             </div>
           )}
 
@@ -235,6 +266,11 @@ export default function Home() {
               <article className="panel">
                 <div className="panel-title"><span className="eyebrow">Vision agent</span><h2>Crop disease scan</h2></div>
                 <label className="image-upload">{imagePreview ? <img src={imagePreview} alt="Crop leaf preview" /> : <><strong>Upload a crop leaf image</strong><small>JPG or PNG · close, clear symptoms preferred</small></>}<input type="file" accept="image/*" capture="environment" onChange={(event) => selectImage(event.target.files?.[0])} /></label>
+                <div className="sample-strip">
+                  <button type="button" onClick={() => update("issue", "Yellow-brown leaf spots with possible fungal spread")}>Tomato spotting</button>
+                  <button type="button" onClick={() => update("issue", "Dark leaf lesions after prolonged humidity")}>Blight pattern</button>
+                  <button type="button" onClick={() => update("issue", "No visible disease symptoms")}>Healthy leaf</button>
+                </div>
                 <label>Observed symptom<textarea value={form.issue} onChange={(event) => update("issue", event.target.value)} /></label>
                 <button className="primary full" onClick={() => runAgents()} disabled={loading}>Run disease-to-orchestrator analysis</button>
               </article>
@@ -250,6 +286,11 @@ export default function Home() {
             <article className="panel field-panel">
               <div className="panel-title"><span className="eyebrow">Field inputs</span><h2>Configure the specialist context</h2></div>
               <div className="scenario-row"><button onClick={() => applyScenario("tomato")}>Tomato stress</button><button onClick={() => applyScenario("rice")}>Rice flood risk</button><button onClick={() => applyScenario("maize")}>Maize healthy</button></div>
+              <div className="telemetry-grid">
+                <div><span>Soil moisture</span><strong>{form.moisture}%</strong><small>Root zone</small></div>
+                <div><span>Rain forecast</span><strong>{form.rain} mm</strong><small>Next 24 hours</small></div>
+                <div><span>Field crop</span><strong>{form.crop}</strong><small>{form.district}</small></div>
+              </div>
               <div className="form-grid">
                 <label>Crop<select value={form.crop} onChange={(e) => update("crop", e.target.value)}><option>Tomato</option><option>Rice</option><option>Maize</option><option>Groundnut</option></select></label>
                 <label>District<input value={form.district} onChange={(e) => update("district", e.target.value)} /></label>
