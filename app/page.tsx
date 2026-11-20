@@ -64,6 +64,12 @@ export default function Home() {
   });
   const [result, setResult] = useState(initialResult);
   const [loading, setLoading] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState([
+    { role: "assistant", text: "Hello. I can help with crop symptoms, soil checks, irrigation planning and mandi questions." },
+  ]);
+  const [chatLoading, setChatLoading] = useState(false);
 
   useEffect(() => {
     fetch("/api/ecosystem")
@@ -97,6 +103,39 @@ export default function Home() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  async function sendChat(event: FormEvent) {
+    event.preventDefault();
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+    setChatInput("");
+    setChatMessages((current) => [...current, { role: "user", text }]);
+    setChatLoading(true);
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, field: form }),
+      });
+      const data = await response.json();
+      setChatMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          text: response.ok
+            ? data.reply
+            : "The assistant is unavailable. Please use the field analysis tool.",
+        },
+      ]);
+    } catch {
+      setChatMessages((current) => [
+        ...current,
+        { role: "assistant", text: "The assistant could not connect. Please verify the field inputs and try again." },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
   return (
     <main className="shell">
       <div className="govbar">
@@ -116,9 +155,11 @@ export default function Home() {
         <div className="brand"><span className="brandmark">AM</span> AgroMind</div>
         <div className="navlinks">
           <a href="#platform">Home</a>
-          <a href="#agents">Decision Services</a>
-          <a href="#plan">Evidence Dashboard</a>
-          <a href="#sources">Data Sources</a>
+          <a href="#features">Features</a>
+          <a href="#agents">AI Agents</a>
+          <a href="#how-it-works">How It Works</a>
+          <a href="#food-security">Food Security</a>
+          <a href="#about">About</a>
         </div>
         <button className="demo-pill">Authorized Data Gateway</button>
       </nav>
@@ -142,7 +183,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="control-card" id="agents">
+        <div className="control-card" id="field-workspace">
           <form className="card" onSubmit={runAgents}>
             <h2>Field decision workspace</h2>
             <div className="field-grid">
@@ -178,7 +219,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="public-services">
+      <section className="public-services" id="features">
         <div className="public-services-inner">
           <div className="public-heading">
             <span className="eyebrow">Agricultural services</span>
@@ -224,7 +265,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="agents-section" id="agent-services">
+      <section className="agents-section" id="agents">
         <div className="agents-inner">
           <div className="public-heading">
             <span className="eyebrow">Specialist services</span>
@@ -265,6 +306,62 @@ export default function Home() {
               <h3>Market Intelligence</h3>
               <p>Variety-wise mandi prices, harvest timing context and national indices.</p>
               <small>Primary evidence: data.gov.in / AGMARKNET</small>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="platform-section" id="platform-suite">
+        <div className="information-inner">
+          <div className="public-heading">
+            <span className="eyebrow">Comprehensive platform suite</span>
+            <h2>Everything farmers need in one connected workspace</h2>
+          </div>
+          <div className="platform-grid">
+            {[
+              ["AI Crop Disease Detection", "Foliar symptom review, confidence guidance and expert escalation."],
+              ["Smart Irrigation Planning", "Weather- and soil-moisture-aware scheduling without automatic pump action."],
+              ["Soil & Nutrient Intelligence", "Lab-first nutrient planning and responsible resource guidance."],
+              ["Crop & Yield Planning", "Suitability, harvest timing and production-context analysis."],
+              ["Market Price Intelligence", "Variety-wise mandi prices and regional market evidence."],
+              ["AI Farm Assistant", "Conversational access to field-specific agricultural guidance."],
+              ["Farm Monitoring", "A single evidence dashboard for field, weather and specialist outputs."],
+              ["Food Security Insights", "Aggregated indicators for cooperatives and regional planning."],
+            ].map(([title, description]) => (
+              <article key={title}>
+                <h3>{title}</h3>
+                <p>{description}</p>
+                <button type="button" onClick={() => document.querySelector("#agents")?.scrollIntoView()}>
+                  Explore capability
+                </button>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="food-section" id="food-security">
+        <div className="information-inner">
+          <div className="public-heading">
+            <span className="eyebrow">Community and macro intelligence</span>
+            <h2>Building a more resilient agricultural future</h2>
+          </div>
+          <div className="food-grid">
+            <article>
+              <h3>Regional production context</h3>
+              <p>Compare crop availability, production indices and aggregate surplus signals.</p>
+            </article>
+            <article>
+              <h3>Deficit early warnings</h3>
+              <p>Review potential shortages and seasonal supply pressure with local validation.</p>
+            </article>
+            <article>
+              <h3>Buffer and reserve planning</h3>
+              <p>Identify where further institutional and cooperative evidence is needed.</p>
+            </article>
+            <article>
+              <h3>Farmer privacy</h3>
+              <p>Community indicators should use anonymized records; personal parcel data stays private.</p>
             </article>
           </div>
         </div>
@@ -330,7 +427,41 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <footer className="footer">
+      {chatOpen && (
+        <aside className="chat-panel" aria-label="AgroMind AI Farm Assistant">
+          <header>
+            <div>
+              <strong>AI Farm Assistant</strong>
+              <small>Evidence-aware · expert review required</small>
+            </div>
+            <button type="button" onClick={() => setChatOpen(false)} aria-label="Close chat">×</button>
+          </header>
+          <div className="chat-messages">
+            {chatMessages.map((message, index) => (
+              <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
+                {message.text}
+              </div>
+            ))}
+            {chatLoading && <div className="chat-message assistant">Preparing a verified response…</div>}
+          </div>
+          <form className="chat-form" onSubmit={sendChat}>
+            <input
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              placeholder="Ask about crops, soil or irrigation"
+              aria-label="Farm assistant message"
+            />
+            <button type="submit" disabled={chatLoading}>Send</button>
+          </form>
+        </aside>
+      )}
+      {!chatOpen && (
+        <button className="chat-launcher" type="button" onClick={() => setChatOpen(true)}>
+          <span>Ask</span>
+          <strong>AI Farm Assistant</strong>
+        </button>
+      )}
+      <footer className="footer" id="about">
         AgroMind is an independent decision-support prototype, not an official Government of India website.
         Decisions require local expert verification · no automatic consequential field actions.
       </footer>
