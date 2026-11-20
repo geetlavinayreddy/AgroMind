@@ -158,6 +158,7 @@ export default function Home() {
           <a href="#features">Features</a>
           <a href="#agents">AI Agents</a>
           <a href="#how-it-works">How It Works</a>
+          <a href="#plan">Collaboration Demo</a>
           <a href="#food-security">Food Security</a>
           <a href="#about">About</a>
         </div>
@@ -461,9 +462,77 @@ export default function Home() {
           <strong>AI Farm Assistant</strong>
         </button>
       )}
-      <footer className="footer" id="about">
-        AgroMind is an independent decision-support prototype, not an official Government of India website.
-        Decisions require local expert verification · no automatic consequential field actions.
+      <section className="legal-section" id="about">
+        <div className="information-inner">
+          <div className="public-heading">
+            <span className="eyebrow">About AgroMind AI</span>
+            <h2>Independent agricultural decision support</h2>
+          </div>
+          <p className="about-copy">
+            AgroMind AI unites crop disease triage, smart irrigation, soil resource optimization,
+            mandi market intelligence and a central reconciliating agent. The platform is an
+            independent prototype and is not an official government service.
+          </p>
+        </div>
+      </section>
+
+      <section className="legal-section policy-section" id="privacy">
+        <div className="information-inner policy-grid">
+          <article>
+            <h2>Privacy Policy</h2>
+            <p>Field inputs are used only to process the requested analysis. Avoid entering personal identifiers or sensitive financial information. Any future account or persistent-history feature should collect and disclose data only with explicit consent.</p>
+          </article>
+          <article id="terms">
+            <h2>Terms &amp; Conditions</h2>
+            <p>AgroMind provides decision-support information, not certified agronomic, medical, legal or financial advice. No recommendation is automatically executed. Users and qualified local professionals remain responsible for field decisions and applicable local regulations.</p>
+          </article>
+          <article id="security">
+            <h2>Security Disclosures</h2>
+            <p>API credentials must remain in server-side environment variables and must never be exposed in browser code or source control. Source and model responses should be reviewed before consequential use.</p>
+          </article>
+        </div>
+      </section>
+
+      <footer className="site-footer" id="support">
+        <div className="footer-inner">
+          <div className="footer-brand">
+            <div className="brand"><span className="brandmark">AM</span> AgroMind AI</div>
+            <p>From smart farming to smarter decisions. An integrated multi-agent agricultural intelligence platform.</p>
+            <small>Version 2.4.0 · Enterprise prototype</small>
+          </div>
+          <div>
+            <h3>Navigation</h3>
+            <a href="#platform">Home</a>
+            <a href="#features">Platform Features</a>
+            <a href="#agents">AI Agents</a>
+            <a href="#how-it-works">How It Works</a>
+            <a href="#plan">Collaboration Demo</a>
+            <a href="#food-security">Food Security</a>
+          </div>
+          <div>
+            <h3>Platform Features</h3>
+            <span>Disease Detection</span>
+            <span>Smart Irrigation</span>
+            <span>Soil &amp; Nutrient Intelligence</span>
+            <span>Market Intelligence</span>
+            <span>Central Orchestrator</span>
+          </div>
+          <div>
+            <h3>Connect &amp; Support</h3>
+            <a href="mailto:?subject=AgroMind%20AI%20support">Contact Team</a>
+            <a href="#privacy">Privacy Policy</a>
+            <a href="#terms">Terms &amp; Conditions</a>
+            <a href="#security">Security Disclosures</a>
+          </div>
+        </div>
+        <div className="footer-bottom">
+          <span>© 2026 AgroMind AI. All rights reserved.</span>
+          <span>
+            <a href="#privacy">Privacy Policy</a>
+            <a href="#terms">Terms of Service</a>
+            <a href="#security">Security Disclosures</a>
+          </span>
+        </div>
       </footer>
     </main>
   );
