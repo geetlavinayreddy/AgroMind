@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AgroMind AI",
+  title: "AgroMind",
   description: "Authorized, auditable agricultural intelligence",
 };
 

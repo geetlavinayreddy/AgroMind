@@ -74,7 +74,7 @@ export default function Home() {
   return (
     <main className="shell">
       <nav className="nav" aria-label="Main navigation">
-        <div className="brand"><span className="brandmark">AM</span> AgroMind AI</div>
+        <div className="brand"><span className="brandmark">AM</span> AgroMind</div>
         <div className="navlinks">
           <a href="#platform">Platform</a>
           <a href="#agents">Agents</a>
@@ -175,7 +175,7 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <footer className="footer">AgroMind AI · decisions require local expert verification · no black-box field actions</footer>
+      <footer className="footer">AgroMind · decisions require local expert verification · no black-box field actions</footer>
     </main>
   );
 }
