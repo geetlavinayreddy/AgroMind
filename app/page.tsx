@@ -88,23 +88,38 @@ export default function Home() {
 
   return (
     <main className="shell">
+      <div className="govbar">
+        <div>
+          <span className="gov-emblem" aria-hidden="true">AM</span>
+          <span>भारत सरकार | Government of India</span>
+        </div>
+        <div className="govtools">
+          <span>Screen Reader Access</span>
+          <span>A+</span>
+          <span>A</span>
+          <span>A-</span>
+          <span>English / हिन्दी</span>
+        </div>
+      </div>
       <nav className="nav" aria-label="Main navigation">
         <div className="brand"><span className="brandmark">AM</span> AgroMind</div>
         <div className="navlinks">
-          <a href="#platform">Platform</a>
-          <a href="#agents">Agents</a>
-          <a href="#plan">Action plan</a>
+          <a href="#platform">Home</a>
+          <a href="#agents">Decision Services</a>
+          <a href="#plan">Evidence Dashboard</a>
+          <a href="#sources">Data Sources</a>
         </div>
-        <button className="demo-pill">Authorized data mode</button>
+        <button className="demo-pill">Authorized Data Gateway</button>
       </nav>
 
       <section className="hero" id="platform">
         <div>
-          <span className="eyebrow">Agentic agricultural intelligence</span>
-          <h1>Smarter decisions, <span>field by field.</span></h1>
+          <span className="eyebrow">National Agricultural Decision Support</span>
+          <h1>Evidence-based decisions, <span>field by field.</span></h1>
           <p className="lead">
-            One governed workspace where specialized agents reconcile crop health,
-            irrigation, soil resources, market timing, and official public datasets.
+            AgroMind provides a governed decision workspace that brings together
+            crop health, irrigation, soil resources, mandi prices and official public datasets.
+            Recommendations require field verification and expert approval.
           </p>
           <div className="actions">
             <button className="primary" onClick={() => document.querySelector("#agents")?.scrollIntoView()}>
@@ -152,6 +167,87 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="public-services">
+        <div className="public-services-inner">
+          <div className="public-heading">
+            <span className="eyebrow">Agricultural services</span>
+            <h2>Integrated decision support for every stage</h2>
+          </div>
+          <div className="service-grid">
+            <article>
+              <span className="service-number">01</span>
+              <h3>Crop Health</h3>
+              <p>Symptom triage, disease evidence and expert escalation.</p>
+            </article>
+            <article>
+              <span className="service-number">02</span>
+              <h3>Water Planning</h3>
+              <p>Soil moisture and weather-aligned irrigation guidance.</p>
+            </article>
+            <article>
+              <span className="service-number">03</span>
+              <h3>Soil Resources</h3>
+              <p>Lab-first nutrient planning and resource efficiency.</p>
+            </article>
+            <article>
+              <span className="service-number">04</span>
+              <h3>Market Information</h3>
+              <p>Variety-wise mandi prices and national production context.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="information-section" id="how-it-works">
+        <div className="information-inner">
+          <div className="public-heading">
+            <span className="eyebrow">How it works</span>
+            <h2>From field evidence to reviewed action</h2>
+          </div>
+          <div className="workflow-grid">
+            <article><span>1</span><h3>Submit field information</h3><p>Enter crop, district, soil, moisture and observed symptoms.</p></article>
+            <article><span>2</span><h3>Independent specialist analysis</h3><p>Four agents analyze their designated evidence domain separately.</p></article>
+            <article><span>3</span><h3>Central reconciliation</h3><p>The orchestrator identifies conflicts and prepares a unified plan.</p></article>
+            <article><span>4</span><h3>Human approval</h3><p>Farmers and qualified experts review all consequential recommendations.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section className="agents-section" id="agent-services">
+        <div className="agents-inner">
+          <div className="public-heading">
+            <span className="eyebrow">Specialist services</span>
+            <h2>Independent intelligence agents</h2>
+          </div>
+          <div className="agent-card-grid">
+            <article>
+              <span className="agent-code">01</span>
+              <h3>Disease Detection</h3>
+              <p>Crop symptom triage with district disease evidence and expert escalation.</p>
+              <small>Primary evidence: Krishi DSS</small>
+            </article>
+            <article>
+              <span className="agent-code">02</span>
+              <h3>Smart Irrigation</h3>
+              <p>Weather-aware and soil-moisture-aware water scheduling guidance.</p>
+              <small>Primary evidence: Open-Meteo / IMD-ready gateway</small>
+            </article>
+            <article>
+              <span className="agent-code">03</span>
+              <h3>Resource Optimization</h3>
+              <p>Soil-lab-first nutrient planning without invented fertilizer doses.</p>
+              <small>Primary evidence: Soil Health Card</small>
+            </article>
+            <article>
+              <span className="agent-code">04</span>
+              <h3>Market Intelligence</h3>
+              <p>Variety-wise mandi prices, harvest timing context and national indices.</p>
+              <small>Primary evidence: data.gov.in / AGMARKNET</small>
+            </article>
+          </div>
+        </div>
+      </section>
+
       <section className="workspace" id="plan">
         <div className="workspace-inner">
           <div className="section-head">
@@ -178,7 +274,7 @@ export default function Home() {
               <ul>{result.plan.map((item) => <li key={item}>{item}</li>)}</ul>
               {result.warnings.map((item) => <p key={item}>! {item}</p>)}
             </article>
-            <aside className="sources">
+            <aside className="sources" id="sources">
               <h3>Evidence & data sources</h3>
               {result.sources.map((source) => (
                 <div className="source" key={source.name}>
