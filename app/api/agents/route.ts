@@ -130,6 +130,56 @@ async function getProductionIndex(crop: string) {
   }
 }
 
+async function getSoilEvidence(district: string, soil: string) {
+  const url = process.env.SOIL_HEALTH_API_URL;
+  if (!url) return null;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(process.env.SOIL_HEALTH_API_KEY
+          ? { Authorization: `Bearer ${process.env.SOIL_HEALTH_API_KEY}` }
+          : {}),
+      },
+      body: JSON.stringify({ district, soilType: soil }),
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    return {
+      name: "Government Soil Health Card evidence",
+      data: await response.json(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getCropDiseaseEvidence(crop: string, district: string) {
+  const url = process.env.KRISHI_DSS_API_URL;
+  if (!url) return null;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(process.env.KRISHI_DSS_API_KEY
+          ? { Authorization: `Bearer ${process.env.KRISHI_DSS_API_KEY}` }
+          : {}),
+      },
+      body: JSON.stringify({ crop, district }),
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    return {
+      name: "Krishi DSS crop and disease-incidence evidence",
+      data: await response.json(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function fallbackAgent(agent: string, input: FieldInput, detail: string): AgentResult {
   return { agent, status: "fallback", summary: detail, confidence: 55 };
 }
@@ -145,22 +195,30 @@ export async function POST(request: Request) {
   const weather = await getWeather(input.district);
   const market = await getAuthorizedMarket(input.crop, input.district);
   const productionIndex = await getProductionIndex(input.crop);
+  const soilEvidence = await getSoilEvidence(input.district, input.soil);
+  const diseaseEvidence = await getCropDiseaseEvidence(input.crop, input.district);
 
   const specialists = [
     {
       agent: "Disease",
-      prompt: `You are a crop-disease triage specialist. Given crop=${input.crop}, observed_issue=${input.issue}, district=${input.district}, respond in <=45 words. State likely causes, 2 checks, and when to escalate. Do not prescribe a pesticide dose; label uncertainty.`,
-      fallback: "Visible symptoms need leaf examination",
+      prompt: `You are the independent Disease Detection Agent. Use crop=${input.crop}, observed_issue=${input.issue}, district=${input.district}, district_disease_evidence=${JSON.stringify(diseaseEvidence?.data ?? "not connected")}. Respond in <=45 words. State likely causes, two checks, confidence, and escalation threshold. Do not prescribe pesticide doses.`,
+      fallback: diseaseEvidence
+        ? "Authorized disease-incidence evidence received; field confirmation still required"
+        : "Krishi DSS disease evidence is not configured; leaf examination required",
     },
     {
       agent: "Irrigation",
-      prompt: `You are an irrigation specialist. Field: crop=${input.crop}, soil=${input.soil}, moisture=${input.moisture}%, forecast_rain=${input.rain}mm, weather_probability=${weather?.probability ?? "unknown"}. Respond in <=45 words. Give one safe scheduling action and one soil check. No infrastructure operation without approval.`,
-      fallback: "Forecast and soil moisture are under review",
+      prompt: `You are the independent Smart Irrigation Agent. Use crop=${input.crop}, soil=${input.soil}, moisture=${input.moisture}%, forecast_rain=${input.rain}mm, weather_probability=${weather?.probability ?? "unknown"}. Respond in <=45 words. Give one evidence-based scheduling action and one root-zone check. Never operate pump hardware automatically.`,
+      fallback: weather
+        ? "District forecast connected; moisture sensor verification required"
+        : "Weather evidence unavailable; irrigation decision must remain conservative",
     },
     {
       agent: "Resources",
-      prompt: `You are a soil-nutrient specialist. Given crop=${input.crop}, soil=${input.soil}, district=${input.district}, respond in <=45 words. Recommend only a verified soil-test workflow and general nutrient categories. Never invent NPK doses.`,
-      fallback: "A soil test is required before nutrient dosing",
+      prompt: `You are the independent Resource Optimization Agent. Use crop=${input.crop}, soil=${input.soil}, district=${input.district}, soil_health_evidence=${JSON.stringify(soilEvidence?.data ?? "not connected")}. Respond in <=45 words. Recommend only a soil-lab workflow and general nutrient categories. Never invent NPK doses.`,
+      fallback: soilEvidence
+        ? "Authorized soil evidence received; verify field-specific lab values"
+        : "A verified Soil Health Card or lab test is required",
     },
     {
       agent: "Market",
@@ -196,6 +254,8 @@ export async function POST(request: Request) {
 
   const sources: { name: string; status: "authorized" | "illustrative" }[] = [
     weather ? { name: weather.name, status: "authorized" } : { name: "District weather", status: "illustrative" },
+    diseaseEvidence ? { name: diseaseEvidence.name, status: "authorized" } : { name: "Krishi DSS disease-incidence evidence", status: "illustrative" },
+    soilEvidence ? { name: soilEvidence.name, status: "authorized" } : { name: "Government Soil Health Card evidence", status: "illustrative" },
     market ? { name: market.name, status: "authorized" } : { name: "Agmarknet variety-wise daily prices", status: "illustrative" },
     productionIndex
       ? { name: productionIndex.name, status: "authorized" }
@@ -211,6 +271,15 @@ export async function POST(request: Request) {
     agents,
     sources,
     evidence: {
+      weather: weather
+        ? { name: weather.name, probability: weather.probability }
+        : null,
+      disease: diseaseEvidence
+        ? { name: diseaseEvidence.name, connected: true }
+        : null,
+      soil: soilEvidence
+        ? { name: soilEvidence.name, connected: true }
+        : null,
       market: market
         ? {
             recordCount: market.recordCount,
