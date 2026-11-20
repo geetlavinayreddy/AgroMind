@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "python:dev": "python -m uvicorn agromind_api.main:app --app-dir backend --reload --port 8000",
+    "python:test": "python -m pytest backend/tests -q",
     "build": "next build",
     "start": "next start",
     "lint": "eslint ."

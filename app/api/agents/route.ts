@@ -192,6 +192,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
+  const pythonApiUrl = process.env.AGROMIND_PYTHON_API_URL;
+  if (pythonApiUrl) {
+    try {
+      const pythonResponse = await fetch(`${pythonApiUrl.replace(/\/$/, "")}/api/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+        cache: "no-store",
+      });
+      if (pythonResponse.ok) {
+        return NextResponse.json(await pythonResponse.json());
+      }
+    } catch {
+      // The existing Node fallback remains available if the Python service is offline.
+    }
+  }
+
   const weather = await getWeather(input.district);
   const market = await getAuthorizedMarket(input.crop, input.district);
   const productionIndex = await getProductionIndex(input.crop);
