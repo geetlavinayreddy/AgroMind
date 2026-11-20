@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type AgentResult = {
   agent: string;
@@ -50,6 +50,10 @@ const initialResult: RunResult = {
 };
 
 export default function Home() {
+  const [ecosystem, setEcosystem] = useState<{
+    orchestrator: { name: string; humanApprovalRequired: boolean };
+    agents: { name: string; domain: string; status: string; authorizedSources: string[] }[];
+  } | null>(null);
   const [form, setForm] = useState({
     crop: "Tomato",
     district: "Anantapur",
@@ -60,6 +64,13 @@ export default function Home() {
   });
   const [result, setResult] = useState(initialResult);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/ecosystem")
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => data ? setEcosystem(data) : null)
+      .catch(() => setEcosystem(null));
+  }, []);
 
   async function runAgents(event: FormEvent) {
     event.preventDefault();
@@ -91,7 +102,7 @@ export default function Home() {
       <div className="govbar">
         <div>
           <span className="gov-emblem" aria-hidden="true">AM</span>
-          <span>भारत सरकार | Government of India</span>
+          <span>AgroMind Agricultural Decision Support | Prototype</span>
         </div>
         <div className="govtools">
           <span>Screen Reader Access</span>
@@ -219,6 +230,17 @@ export default function Home() {
             <span className="eyebrow">Specialist services</span>
             <h2>Independent intelligence agents</h2>
           </div>
+          {ecosystem && (
+            <div className="ecosystem-status" aria-label="Agent ecosystem status">
+              <strong>{ecosystem.orchestrator.name}</strong>
+              <span>Central reconciliation</span>
+              {ecosystem.agents.map((agent) => (
+                <span key={agent.name}>
+                  {agent.name}: {agent.status}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="agent-card-grid">
             <article>
               <span className="agent-code">01</span>
@@ -308,7 +330,10 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <footer className="footer">AgroMind · decisions require local expert verification · no black-box field actions</footer>
+      <footer className="footer">
+        AgroMind is an independent decision-support prototype, not an official Government of India website.
+        Decisions require local expert verification · no automatic consequential field actions.
+      </footer>
     </main>
   );
 }

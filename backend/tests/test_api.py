@@ -48,3 +48,16 @@ def test_analyze_returns_all_specialists(monkeypatch) -> None:
     ]
     assert len(body["plan"]) >= 3
     assert len(body["sources"]) == 5
+
+
+def test_ecosystem_reports_all_agents_and_orchestrator() -> None:
+    response = client.get("/api/ecosystem")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["orchestrator"]["name"] == "Central Orchestrator"
+    assert [agent["name"] for agent in body["agents"]] == [
+        "Disease",
+        "Irrigation",
+        "Resources",
+        "Market",
+    ]

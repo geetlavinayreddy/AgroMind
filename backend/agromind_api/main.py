@@ -4,7 +4,7 @@ import os
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -37,6 +37,25 @@ class AgentResult(BaseModel):
     status: str
     summary: str
     confidence: int
+
+
+AUTHORIZED_DOMAINS = {
+    "weather": {"api.open-meteo.com", "geocoding-api.open-meteo.com"},
+    "market": {"api.data.gov.in", "www.data.gov.in"},
+    "production": {"www.data.gov.in"},
+    "soil": {"soilhealth.dac.gov.in"},
+    "disease": {"krishi-dss.gov.in"},
+}
+
+AGENT_REGISTRY = {
+    "Disease": {"domain": "disease", "sources": ["Krishi DSS"]},
+    "Irrigation": {"domain": "weather", "sources": ["Open-Meteo", "IMD gateway"]},
+    "Resources": {"domain": "soil", "sources": ["Soil Health Card"]},
+    "Market": {
+        "domain": "market",
+        "sources": ["data.gov.in", "AGMARKNET", "Agricultural indices"],
+    },
+}
 
 
 async def gemini(prompt: str) -> str | None:
@@ -223,9 +242,77 @@ async def get_authorized_evidence(
     return response.json()
 
 
+def orchestrate(field: FieldInput, agents: list[AgentResult]) -> tuple[list[str], list[str]]:
+    summaries = {item.agent: item.summary.lower() for item in agents}
+    conflicts: list[str] = []
+    plan: list[str] = []
+
+    try:
+        moisture = float(field.moisture)
+    except ValueError:
+        moisture = None
+
+    try:
+        rain = float(field.rain)
+    except ValueError:
+        rain = None
+
+    if moisture is not None and moisture < 30:
+        plan.append("Prioritize root-zone moisture verification before irrigation release")
+    elif rain is not None and rain >= 20:
+        plan.append("Delay irrigation where the forecast is expected to supply sufficient water")
+    else:
+        plan.append("Verify soil moisture and district forecast before watering")
+
+    plan.append("Obtain a current soil test before any fertilizer or nutrient amendment")
+    plan.append("Photograph symptoms, preserve records and seek local crop-health verification")
+
+    if rain is not None and rain >= 20 and moisture is not None and moisture < 30:
+        conflicts.append(
+            "Irrigation evidence conflict: depleted moisture but substantial forecast rainfall"
+        )
+    if "mandi" not in summaries["Market"]:
+        conflicts.append("Market evidence incomplete: live district mandi comparison unavailable")
+
+    return plan[:4], conflicts
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "service": "AgroMind Python Agent API"}
+
+
+@app.get("/api/ecosystem")
+async def ecosystem_status() -> dict[str, Any]:
+    env_by_agent = {
+        "Disease": "KRISHI_DSS_API_URL",
+        "Irrigation": None,
+        "Resources": "SOIL_HEALTH_API_URL",
+        "Market": "DATA_GOV_IN_API_KEY",
+    }
+    agent_statuses = []
+    for name, config in AGENT_REGISTRY.items():
+        env_name = env_by_agent[name]
+        connected = bool(
+            (name == "Irrigation")
+            or (env_name and os.getenv(env_name))
+        )
+        agent_statuses.append(
+            {
+                "name": name,
+                "domain": config["domain"],
+                "authorizedSources": config["sources"],
+                "status": "connected" if connected else "fallback",
+            }
+        )
+    return {
+        "orchestrator": {
+            "name": "Central Orchestrator",
+            "role": "Reconciles specialist evidence and detects conflicts",
+            "humanApprovalRequired": True,
+        },
+        "agents": agent_statuses,
+    }
 
 
 @app.post("/api/analyze")
@@ -322,18 +409,16 @@ async def analyze(field: FieldInput) -> dict[str, Any]:
         "Require local agronomist, soil-lab, and farmer approval."
     )
     orchestrator_text = await gemini(orchestrator_prompt)
+    deterministic_plan, conflicts = orchestrate(field, agents)
+    plan = deterministic_plan
     if orchestrator_text:
-        plan = [
+        orchestrated = [
             line.strip(" -*0123456789.)")
             for line in orchestrator_text.replace("\n", " ").split(". ")
             if line.strip()
-        ][:4]
-    else:
-        plan = [
-            "Use the latest verified soil test before nutrient decisions",
-            "Avoid irrigation before checking the forecast and root-zone moisture",
-            "Photograph symptoms and consult a local crop protection specialist",
         ]
+        if orchestrated:
+            plan = (orchestrated + plan)[:4]
 
     sources = [
         {
@@ -363,6 +448,7 @@ async def analyze(field: FieldInput) -> dict[str, Any]:
         "warnings": [
             "No treatment, irrigation release, or fertilizer dose is applied automatically.",
             "Local agronomic verification is required before consequential action.",
+            *conflicts,
         ],
         "agents": [agent.model_dump() for agent in agents],
         "sources": sources,

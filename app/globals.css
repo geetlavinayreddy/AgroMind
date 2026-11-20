@@ -292,6 +292,23 @@ button { cursor: pointer; }
   padding-top: 10px;
   font-size: 11px;
 }
+.ecosystem-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  color: #607068;
+  font-size: 12px;
+}
+.ecosystem-status strong { color: var(--green-dark); }
+.ecosystem-status span {
+  border-left: 1px solid var(--line);
+  padding-left: 8px;
+}
 .information-section {
   background: var(--white);
   border-bottom: 1px solid var(--line);
