@@ -4,7 +4,7 @@ import os
 from typing import Any
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -30,6 +30,8 @@ class FieldInput(BaseModel):
     moisture: str = Field(min_length=1, max_length=20)
     rain: str = Field(min_length=1, max_length=20)
     issue: str = Field(min_length=1, max_length=300)
+    image: str | None = None
+    specialist: str | None = Field(default=None, max_length=30)
 
 
 class AgentResult(BaseModel):
@@ -37,6 +39,16 @@ class AgentResult(BaseModel):
     status: str
     summary: str
     confidence: int
+
+
+class DiseaseDiagnosis(BaseModel):
+    crop_name: str
+    disease_name: str
+    confidence: str
+    severity: str
+    symptoms: list[str]
+    recommendations: list[str]
+    follow_up: list[str]
 
 
 AUTHORIZED_DOMAINS = {
@@ -304,7 +316,8 @@ def orchestrate(field: FieldInput, agents: list[AgentResult]) -> tuple[list[str]
         conflicts.append(
             "Irrigation evidence conflict: depleted moisture but substantial forecast rainfall"
         )
-    if "mandi" not in summaries["Market"]:
+    market_summary = summaries.get("Market")
+    if market_summary is not None and "mandi" not in market_summary:
         conflicts.append("Market evidence incomplete: live district mandi comparison unavailable")
 
     return plan[:4], conflicts
@@ -313,6 +326,66 @@ def orchestrate(field: FieldInput, agents: list[AgentResult]) -> tuple[list[str]
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "service": "AgroMind Python Agent API"}
+
+
+@app.get("/api/weather/{district}")
+async def weather_endpoint(district: str) -> dict[str, Any]:
+    weather = await get_weather(district)
+    if weather is None:
+        raise HTTPException(status_code=404, detail="Weather data unavailable")
+    return weather
+
+
+@app.post("/api/analyze-crop")
+async def analyze_crop(field: FieldInput) -> dict[str, Any]:
+    diagnosis = await gemini(
+        "Analyze this crop condition. Return plain structured JSON only with "
+        "crop_name, disease_name, confidence, severity, symptoms, recommendations, "
+        "and follow_up. Do not invent a confirmed diagnosis and do not prescribe doses. "
+        f"Crop={field.crop}; district={field.district}; symptoms={field.issue}.",
+        field.image,
+    )
+    if diagnosis is None:
+        return {
+            "crop_name": field.crop,
+            "disease_name": "Unconfirmed",
+            "confidence": "Low",
+            "severity": "Unknown",
+            "symptoms": [field.issue],
+            "recommendations": [
+                "Compare several leaves",
+                "Consult a local crop protection specialist",
+            ],
+            "follow_up": ["Capture a sharp close-up", "Record spread and growth stage"],
+        }
+    try:
+        import json
+
+        parsed = json.loads(diagnosis)
+        return DiseaseDiagnosis(**parsed).model_dump()
+    except Exception:
+        return {
+            "crop_name": field.crop,
+            "disease_name": "Unconfirmed",
+            "confidence": "Low",
+            "severity": "Unknown",
+            "symptoms": [field.issue],
+            "recommendations": ["Seek expert verification"],
+            "follow_up": ["Do not apply an invented treatment dose"],
+        }
+
+
+@app.post("/api/ask-agronomist")
+async def ask_agronomist(payload: dict[str, str]) -> dict[str, str]:
+    question = payload.get("question", "").strip()
+    if not question or len(question) > 1500:
+        raise HTTPException(status_code=400, detail="A valid question is required")
+    answer = await gemini(
+        "You are an agricultural extension assistant. Answer only with evidence-aware "
+        "advice, label uncertainty, avoid invented doses and recommend local experts "
+        f"for consequential actions. Question: {question}"
+    )
+    return {"reply": answer or "Verified evidence is unavailable. Consult a local agronomist."}
 
 
 @app.get("/api/ecosystem")
@@ -443,6 +516,13 @@ async def analyze(field: FieldInput) -> dict[str, Any]:
             ),
         },
     ]
+
+    if field.specialist in {"Disease", "Irrigation", "Resources", "Market"}:
+        specialists = [
+            specialist
+            for specialist in specialists
+            if specialist["agent"] == field.specialist
+        ]
 
     agents: list[AgentResult] = []
     for specialist in specialists:

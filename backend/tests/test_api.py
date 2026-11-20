@@ -74,3 +74,33 @@ def test_source_status_lists_all_authorized_sources() -> None:
         "Krishi DSS",
         "Soil Health Card",
     }
+
+
+def test_specialist_only_run(monkeypatch) -> None:
+    async def no_core_evidence(field):
+        return None, None, None
+
+    async def no_external_evidence(*args, **kwargs):
+        return None
+
+    async def no_gemini(prompt, image=None):
+        return None
+
+    monkeypatch.setattr("agromind_api.main._gather_core_evidence", no_core_evidence)
+    monkeypatch.setattr("agromind_api.main.get_authorized_evidence", no_external_evidence)
+    monkeypatch.setattr("agromind_api.main.gemini", no_gemini)
+
+    response = client.post(
+        "/api/analyze",
+        json={
+            "crop": "Tomato",
+            "district": "Anantapur",
+            "soil": "Red sandy loam",
+            "moisture": "22",
+            "rain": "18",
+            "issue": "Yellow-brown spots",
+            "specialist": "Irrigation",
+        },
+    )
+    assert response.status_code == 200
+    assert [agent["agent"] for agent in response.json()["agents"]] == ["Irrigation"]

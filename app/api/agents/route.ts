@@ -10,6 +10,7 @@ type FieldInput = {
   rain: string;
   issue: string;
   image?: string;
+  specialist?: "Disease" | "Irrigation" | "Resources" | "Market";
 };
 
 type AgentResult = {
@@ -265,8 +266,12 @@ export async function POST(request: Request) {
     },
   ];
 
+  const selectedSpecialists = input.specialist
+    ? specialists.filter((specialist) => specialist.agent === input.specialist)
+    : specialists;
+
   const agents: AgentResult[] = [];
-  for (const specialist of specialists) {
+  for (const specialist of selectedSpecialists) {
     const text = await gemini(specialist.prompt, specialist.image);
     agents.push(
       text
