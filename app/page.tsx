@@ -16,10 +16,10 @@ const emptyResult: RunResult = {
   plan: ["Select a field scenario or upload a crop image to begin."],
   warnings: ["No action is executed automatically."],
   agents: [
-    { agent: "Disease", status: "fallback", summary: "Waiting for input", confidence: 0 },
-    { agent: "Irrigation", status: "fallback", summary: "Waiting for input", confidence: 0 },
-    { agent: "Resources", status: "fallback", summary: "Waiting for input", confidence: 0 },
-    { agent: "Market", status: "fallback", summary: "Waiting for input", confidence: 0 },
+    { agent: "Disease", status: "ok", summary: "Upload a crop image or describe symptoms to analyze.", confidence: 0 },
+    { agent: "Irrigation", status: "ok", summary: "Set moisture and rainfall to review water timing.", confidence: 0 },
+    { agent: "Resources", status: "ok", summary: "Add soil and district context for nutrient review.", confidence: 0 },
+    { agent: "Market", status: "ok", summary: "Select crop and district to review market context.", confidence: 0 },
   ],
   sources: [{ name: "No source request has run", status: "illustrative" }],
 };
@@ -147,6 +147,36 @@ export default function Home() {
     }
   }
 
+  async function runSpecialist(agentName: "Disease" | "Irrigation" | "Resources" | "Market") {
+    setLoading(true);
+    setActiveAgent(agentName);
+    setView("collaboration");
+    try {
+      const response = await fetch("/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, image: imageData, specialist: agentName }),
+      });
+      if (!response.ok) throw new Error("Agent service unavailable");
+      const data: RunResult = await response.json();
+      setResult((current) => ({
+        ...data,
+        agents: current.agents.map((agent) =>
+          agent.agent === agentName
+            ? data.agents.find((item) => item.agent === agentName) || agent
+            : agent,
+        ),
+      }));
+    } catch {
+      setResult((current) => ({
+        ...current,
+        warnings: ["The selected agent could not be reached. No action was simulated."],
+      }));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function sendChat(event: FormEvent) {
     event.preventDefault();
     const message = chatInput.trim();
@@ -168,23 +198,47 @@ export default function Home() {
 
   if (!sessionStarted) {
     return (
-      <main className="login-shell">
-        <section className="login-panel">
-          <div className="login-brand"><span className="brandmark">AM</span><div><strong>AgroMind AI</strong><span>Agricultural Intelligence Portal</span></div></div>
-          <div className="login-copy">
-            <span className="eyebrow">Secure decision workspace</span>
-            <h1>Evidence-based decisions, field by field.</h1>
-            <p>Sign in to use the disease, irrigation, resource and market intelligence ecosystem.</p>
+      <main className="landing-shell">
+        <nav className="landing-nav">
+          <button className="landing-brand" type="button" onClick={() => document.querySelector("#landing-auth")?.scrollIntoView()}><span>AM</span><strong>AgroMind</strong></button>
+          <div className="landing-links"><button type="button">Home</button><button type="button" onClick={() => document.querySelector("#landing-services")?.scrollIntoView()}>Services</button><button type="button" onClick={() => document.querySelector("#landing-agents")?.scrollIntoView()}>AI Agents</button><button type="button" onClick={() => document.querySelector("#landing-about")?.scrollIntoView()}>About</button></div>
+          <button className="landing-login" type="button" onClick={() => document.querySelector("#landing-auth")?.scrollIntoView()}>Sign in <span>→</span></button>
+        </nav>
+        <section className="landing-hero">
+          <div className="landing-shade" />
+          <div className="landing-hero-content">
+            <div>
+              <span className="landing-eyebrow"><i />Intelligent agriculture platform</span>
+              <h1>Smarter decisions<br />for every field.</h1>
+              <div className="landing-bottom">
+                <article className="landing-feature">
+                  <span>01</span>
+                  <strong>Farm intelligence</strong>
+                  <small>Crop health, irrigation, soil and market signals</small>
+                </article>
+                <article className="landing-copy">
+                  <p>Five specialized agents coordinate evidence and produce a reviewed, unified field plan.</p>
+                  <button type="button" onClick={() => document.querySelector("#landing-auth")?.scrollIntoView()}>Get started <span>→</span></button>
+                </article>
+              </div>
+            </div>
           </div>
+        </section>
+        <section className="landing-services" id="landing-services">
+          <article id="landing-agents"><span>Disease</span><strong>Crop vision</strong><small>Leaf symptoms and escalation</small></article>
+          <article><span>Irrigation</span><strong>Water planning</strong><small>Moisture and forecast review</small></article>
+          <article><span>Resources</span><strong>Soil guidance</strong><small>Lab-first nutrient planning</small></article>
+          <article id="landing-about"><span>Market</span><strong>Mandi context</strong><small>Harvest and price evidence</small></article>
+        </section>
+        <section className="landing-auth" id="landing-auth">
           <form className="login-form" onSubmit={enterSession}>
+            <span className="eyebrow">Secure workspace</span>
             <h2>{authMode === "sign-up" ? "Create account" : "Welcome back"}</h2>
             <label>Email address<input type="email" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} /></label>
             <label>Password<input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /></label>
             {loginError && <p className="login-error">{loginError}</p>}
             <button className="primary login-submit" disabled={authBusy}>{authBusy ? "Please wait..." : authMode === "sign-up" ? "Create account" : "Sign in securely"}</button>
-            <button type="button" className="auth-mode-button" onClick={() => setAuthMode(authMode === "sign-up" ? "sign-in" : "sign-up")}>
-              {authMode === "sign-up" ? "Already registered? Sign in" : "New here? Create an account"}
-            </button>
+            <button type="button" className="auth-mode-button" onClick={() => setAuthMode(authMode === "sign-up" ? "sign-in" : "sign-up")}>{authMode === "sign-up" ? "Already registered? Sign in" : "New here? Create an account"}</button>
           </form>
         </section>
       </main>
@@ -333,6 +387,12 @@ export default function Home() {
                       <div className="specialist-input"><strong>Receives</strong><span>{agent.input}</span></div>
                       <div className="specialist-output"><strong>Produces</strong><p>{working ? "Requesting verified evidence and preparing a response..." : response?.summary || "Waiting for analysis."}</p><small>{agent.output}</small></div>
                       <div className="handoff-line"><strong>Handoff</strong><span>{agent.handoff}</span></div>
+                      <div className="agent-card-actions">
+                        <button type="button" onClick={() => runSpecialist(agent.name as "Disease" | "Irrigation" | "Resources" | "Market")} disabled={loading}>
+                          {working ? "Running..." : `Run ${agent.name}`}
+                        </button>
+                        <button type="button" onClick={() => setView(agent.name === "Disease" ? "disease" : "field")}>Configure input</button>
+                      </div>
                     </article>
                   );
                 })}
