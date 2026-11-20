@@ -9,6 +9,7 @@ type FieldInput = {
   moisture: string;
   rain: string;
   issue: string;
+  image?: string;
 };
 
 type AgentResult = {
@@ -18,7 +19,7 @@ type AgentResult = {
   confidence: number;
 };
 
-async function gemini(prompt: string) {
+async function gemini(prompt: string, image?: string) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
 
@@ -29,7 +30,20 @@ async function gemini(prompt: string) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        contents: [{
+          role: "user",
+          parts: [
+            { text: prompt },
+            ...(image?.startsWith("data:")
+              ? [{
+                  inlineData: {
+                    mimeType: image.slice(5, image.indexOf(";")),
+                    data: image.slice(image.indexOf(",") + 1),
+                  },
+                }]
+              : []),
+          ],
+        }],
         generationConfig: { temperature: 0.1, maxOutputTokens: 300 },
       }),
       cache: "no-store",
@@ -218,6 +232,7 @@ export async function POST(request: Request) {
   const specialists = [
     {
       agent: "Disease",
+      image: input.image,
       prompt: `You are the independent Disease Detection Agent. Use crop=${input.crop}, observed_issue=${input.issue}, district=${input.district}, district_disease_evidence=${JSON.stringify(diseaseEvidence?.data ?? "not connected")}. Respond in <=45 words. State likely causes, two checks, confidence, and escalation threshold. Do not prescribe pesticide doses.`,
       fallback: diseaseEvidence
         ? "Authorized disease-incidence evidence received; field confirmation still required"
@@ -248,7 +263,7 @@ export async function POST(request: Request) {
 
   const agents: AgentResult[] = [];
   for (const specialist of specialists) {
-    const text = await gemini(specialist.prompt);
+    const text = await gemini(specialist.prompt, specialist.image);
     agents.push(
       text
         ? { agent: specialist.agent, status: "ok", summary: text, confidence: 72 }
