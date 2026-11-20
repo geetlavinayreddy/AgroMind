@@ -94,6 +94,31 @@ button { cursor: pointer; }
   color: #75837b;
   line-height: 1.45;
 }
+.scenario-row {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 12px;
+  flex-wrap: wrap;
+}
+.scenario-row button {
+  border: 1px solid #bcc9c0;
+  border-radius: 999px;
+  background: #f7f9f6;
+  color: var(--green-dark);
+  padding: 7px 9px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.scenario-row button:hover {
+  border-color: var(--green);
+  background: var(--green-pale);
+}
+.source a {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: underline;
+}
 .login-error { color: #9a2d25; font-size: 12px; }
 .login-proof {
   height: 100%;

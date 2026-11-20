@@ -269,14 +269,22 @@ export async function POST(request: Request) {
         "Photograph symptoms and consult a local crop protection specialist",
       ];
 
-  const sources: { name: string; status: "authorized" | "illustrative" }[] = [
-    weather ? { name: weather.name, status: "authorized" } : { name: "District weather", status: "illustrative" },
-    diseaseEvidence ? { name: diseaseEvidence.name, status: "authorized" } : { name: "Krishi DSS disease-incidence evidence", status: "illustrative" },
-    soilEvidence ? { name: soilEvidence.name, status: "authorized" } : { name: "Government Soil Health Card evidence", status: "illustrative" },
-    market ? { name: market.name, status: "authorized" } : { name: "Agmarknet variety-wise daily prices", status: "illustrative" },
+  const sources: { name: string; status: "authorized" | "illustrative"; url?: string }[] = [
+    weather
+      ? { name: weather.name, status: "authorized", url: "https://open-meteo.com/" }
+      : { name: "District weather", status: "illustrative", url: "https://open-meteo.com/" },
+    diseaseEvidence
+      ? { name: diseaseEvidence.name, status: "authorized", url: "https://krishi-dss.gov.in/" }
+      : { name: "Krishi DSS disease-incidence evidence", status: "illustrative", url: "https://krishi-dss.gov.in/" },
+    soilEvidence
+      ? { name: soilEvidence.name, status: "authorized", url: "https://soilhealth.dac.gov.in/" }
+      : { name: "Government Soil Health Card evidence", status: "illustrative", url: "https://soilhealth.dac.gov.in/" },
+    market
+      ? { name: market.name, status: "authorized", url: market.sourceUrl }
+      : { name: "Agmarknet variety-wise daily prices", status: "illustrative", url: "https://www.data.gov.in/" },
     productionIndex
-      ? { name: productionIndex.name, status: "authorized" }
-      : { name: "Agricultural production and productivity index", status: "illustrative" },
+      ? { name: productionIndex.name, status: "authorized", url: productionIndex.sourceUrl }
+      : { name: "Agricultural production and productivity index", status: "illustrative", url: "https://www.data.gov.in/" },
   ];
 
   return NextResponse.json({

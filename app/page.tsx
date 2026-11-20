@@ -14,7 +14,7 @@ type RunResult = {
   plan: string[];
   warnings: string[];
   agents: AgentResult[];
-  sources: { name: string; status: "authorized" | "illustrative" }[];
+  sources: { name: string; status: "authorized" | "illustrative"; url?: string }[];
   evidence?: {
     market?: {
       recordCount: number;
@@ -33,20 +33,16 @@ type RunResult = {
 };
 
 const initialResult: RunResult = {
-  plan: [
-    "Run a verified soil test before changing fertilizer",
-    "Delay irrigation when the forecast predicts heavy rain",
-    "Review crop symptoms again after 48 hours",
-  ],
-  warnings: ["Do not apply consequential treatment without local agronomist approval."],
+  plan: ["Complete the field form and run a collaboration analysis."],
+  warnings: ["The initial screen does not contain simulated decisions."],
   agents: [
-    { agent: "Disease", status: "fallback", summary: "Image and history required", confidence: 0 },
-    { agent: "Irrigation", status: "fallback", summary: "Weather context required", confidence: 0 },
-    { agent: "Resources", status: "fallback", summary: "Soil test required", confidence: 0 },
-    { agent: "Market", status: "fallback", summary: "Crop and district required", confidence: 0 },
+    { agent: "Disease", status: "fallback", summary: "Waiting for field inputs", confidence: 0 },
+    { agent: "Irrigation", status: "fallback", summary: "Waiting for field inputs", confidence: 0 },
+    { agent: "Resources", status: "fallback", summary: "Waiting for field inputs", confidence: 0 },
+    { agent: "Market", status: "fallback", summary: "Waiting for field inputs", confidence: 0 },
   ],
   sources: [
-    { name: "Authorized-source gateway", status: "illustrative" },
+    { name: "No source request has run", status: "illustrative" },
   ],
 };
 
@@ -77,6 +73,7 @@ export default function Home() {
     { role: "assistant", text: "Hello. I can help with crop symptoms, soil checks, irrigation planning and mandi questions." },
   ]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [activeAgent, setActiveAgent] = useState("Disease");
 
   useEffect(() => {
     if (!supabase) {
@@ -150,6 +147,13 @@ export default function Home() {
   async function runAgents(event: FormEvent) {
     event.preventDefault();
     setLoading(true);
+    setActiveAgent("Disease");
+    const agentSequence = ["Disease", "Irrigation", "Resources", "Market", "Orchestrator"];
+    let sequenceIndex = 0;
+    const progressTimer = window.setInterval(() => {
+      sequenceIndex = Math.min(sequenceIndex + 1, agentSequence.length - 1);
+      setActiveAgent(agentSequence[sequenceIndex]);
+    }, 350);
     try {
       const response = await fetch("/api/agents", {
         method: "POST",
@@ -158,18 +162,50 @@ export default function Home() {
       });
       if (!response.ok) throw new Error("Agent service unavailable");
       setResult(await response.json());
+      setActiveAgent("Orchestrator");
     } catch {
       setResult({
         ...initialResult,
         warnings: ["The agent service could not be reached. This is an illustrative result, not field advice."],
       });
     } finally {
+      window.clearInterval(progressTimer);
       setLoading(false);
     }
   }
 
   function update(key: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function applyScenario(scenario: "tomato" | "rice" | "maize") {
+    const presets = {
+      tomato: {
+        crop: "Tomato",
+        district: "Anantapur",
+        soil: "Red sandy loam",
+        moisture: "22",
+        rain: "18",
+        issue: "Yellow-brown spots on lower leaves",
+      },
+      rice: {
+        crop: "Rice",
+        district: "Thanjavur",
+        soil: "Clay",
+        moisture: "48",
+        rain: "30",
+        issue: "Unusual leaf discoloration after rain",
+      },
+      maize: {
+        crop: "Maize",
+        district: "Indore",
+        soil: "Black cotton soil",
+        moisture: "36",
+        rain: "8",
+        issue: "No visible disease symptoms",
+      },
+    };
+    setForm(presets[scenario]);
   }
 
   async function sendChat(event: FormEvent) {
@@ -320,7 +356,7 @@ export default function Home() {
             Recommendations require field verification and expert approval.
           </p>
           <div className="actions">
-            <button className="primary" onClick={() => document.querySelector("#agents")?.scrollIntoView()}>
+            <button className="primary" onClick={() => document.querySelector("#field-workspace")?.scrollIntoView()}>
               Analyze a field
             </button>
             <button className="secondary" onClick={() => document.querySelector("#plan")?.scrollIntoView()}>
@@ -332,6 +368,11 @@ export default function Home() {
         <div className="control-card" id="field-workspace">
           <form className="card" onSubmit={runAgents}>
             <h2>Field decision workspace</h2>
+            <div className="scenario-row" aria-label="Field scenario presets">
+              <button type="button" onClick={() => applyScenario("tomato")}>Tomato stress</button>
+              <button type="button" onClick={() => applyScenario("rice")}>Rice flood risk</button>
+              <button type="button" onClick={() => applyScenario("maize")}>Maize healthy</button>
+            </div>
             <div className="field-grid">
               <div className="field">
                 <label htmlFor="crop">Crop</label>
@@ -523,11 +564,18 @@ export default function Home() {
           <div className="agent-grid">
             {["Disease", "Irrigation", "Resources", "Market", "Orchestrator"].map((name, index) => {
               const found = result.agents.find((item) => item.agent === name);
+              const processing = loading && activeAgent === name;
               return (
                 <article className="agent" key={name}>
-                  <span className={`dot ${found?.status === "ok" ? "live" : ""}`} />
+                  <span className={`dot ${found?.status === "ok" ? "live" : processing ? "live" : ""}`} />
                   <strong>{name}</strong>
-                  <p>{index === 4 ? "Reconciles recommendations" : found?.summary || "Specialist analysis"}</p>
+                  <p>
+                    {processing
+                      ? "Analyzing field evidence..."
+                      : index === 4
+                        ? "Reconciles recommendations"
+                        : found?.summary || "Specialist analysis"}
+                  </p>
                 </article>
               );
             })}
@@ -545,6 +593,12 @@ export default function Home() {
                 <div className="source" key={source.name}>
                   <strong>{source.name}</strong><br />
                   <small>{source.status === "authorized" ? "Authorized source" : "Illustrative or unavailable"}</small>
+                  {source.url && (
+                    <>
+                      {" "}
+                      <a href={source.url} target="_blank" rel="noreferrer">Open source</a>
+                    </>
+                  )}
                 </div>
               ))}
               {result.evidence?.market && (
