@@ -729,6 +729,98 @@ button { cursor: pointer; }
   box-shadow: 0 16px 40px rgba(8,38,22,.18);
   padding: 8px 10px 8px 22px;
 }
+.theme-toggle,
+.theme-toggle-dashboard {
+  border: 1px solid #d7ded8;
+  border-radius: 999px;
+  background: white;
+  color: #26362d;
+  padding: 9px 11px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.landing-nav .theme-toggle {
+  position: absolute;
+  right: 118px;
+  top: 17px;
+  display: block;
+}
+.dashboard-header-actions { display: flex; gap: 8px; align-items: center; }
+.theme-toggle-dashboard { background: #f7f9f7; }
+
+.landing-shell.premium-black {
+  background: #080908;
+}
+.landing-shell.premium-black .landing-hero {
+  background:
+    linear-gradient(115deg, rgba(5,6,5,.88), rgba(5,6,5,.22)),
+    url("https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=1800&q=88")
+      center/cover;
+  filter: saturate(.78) contrast(1.08);
+}
+.landing-shell.premium-black .landing-shade {
+  background:
+    linear-gradient(90deg, rgba(3,4,3,.92) 0%, rgba(11,12,11,.24) 58%, rgba(3,4,3,.58) 100%);
+}
+.landing-shell.premium-black .landing-nav {
+  border-color: rgba(255,255,255,.14);
+  background: rgba(17,18,17,.94);
+  box-shadow: 0 16px 40px rgba(0,0,0,.42);
+}
+.landing-shell.premium-black .landing-brand,
+.landing-shell.premium-black .landing-links button { color: #f2f4f1; }
+.landing-shell.premium-black .landing-brand span,
+.landing-shell.premium-black .landing-login,
+.landing-shell.premium-black .landing-copy button { background: #e5e8e3; color: #111311; }
+.landing-shell.premium-black .theme-toggle { display: block; border-color: #3a3d39; background: #242724; color: #f1f3ef; }
+.landing-shell.premium-black .landing-feature {
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.10), rgba(11,12,11,.76)),
+    url("https://images.unsplash.com/photo-1495107334309-fcf20504a5ab?auto=format&fit=crop&w=500&q=75")
+      center/cover;
+  border-color: rgba(255,255,255,.18);
+}
+.landing-shell.premium-black .landing-services,
+.landing-shell.premium-black .landing-auth { background: #141614; }
+.landing-shell.premium-black .landing-services article { border-color: #30332f; }
+.landing-shell.premium-black .landing-services strong { color: #f1f3ef; }
+.landing-shell.premium-black .landing-services span,
+.landing-shell.premium-black .landing-services small { color: #9ba39d; }
+.landing-shell.premium-black .login-form {
+  border-color: #30332f;
+  border-top-color: #e4e7e1;
+  background: #171917;
+  color: #f3f5f1;
+}
+.landing-shell.premium-black .login-form h2,
+.landing-shell.premium-black .login-form label { color: #f3f5f1; }
+.landing-shell.premium-black .login-form input { background: #0f110f; border-color: #3a3d39; color: white; }
+
+.dashboard-shell.premium-black {
+  background: #111310;
+  color: #edf1ec;
+}
+.dashboard-shell.premium-black .dashboard-sidebar { background: #090a09; border-right: 1px solid #252824; }
+.dashboard-shell.premium-black .dashboard-sidebar nav button.active { background: #e8ebe5; color: #151715; }
+.dashboard-shell.premium-black .dashboard-header { background: #171917; border-color: #292c28; }
+.dashboard-shell.premium-black .dashboard-header h1,
+.dashboard-shell.premium-black .panel-title h2 { color: #f1f3ef; }
+.dashboard-shell.premium-black .panel,
+.dashboard-shell.premium-black .metric-card,
+.dashboard-shell.premium-black .action-card,
+.dashboard-shell.premium-black .flow-node,
+.dashboard-shell.premium-black .specialist-card,
+.dashboard-shell.premium-black .field-map-card { background: #171917; border-color: #30332f; }
+.dashboard-shell.premium-black .metric-card span,
+.dashboard-shell.premium-black .metric-card small,
+.dashboard-shell.premium-black .agent-response p,
+.dashboard-shell.premium-black .handoff p,
+.dashboard-shell.premium-black .flow-node small { color: #abb3ad; }
+.dashboard-shell.premium-black .hero-card { border: 1px solid #30332f; }
+.dashboard-shell.premium-black .header-action,
+.dashboard-shell.premium-black .theme-toggle-dashboard { background: #171917; border-color: #4a4e48; color: #edf1ec; }
 .landing-brand {
   display: flex;
   align-items: center;

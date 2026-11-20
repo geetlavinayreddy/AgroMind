@@ -25,6 +25,7 @@ const emptyResult: RunResult = {
 };
 
 export default function Home() {
+  const [theme, setTheme] = useState<"green" | "black">("green");
   const [sessionStarted, setSessionStarted] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -51,6 +52,7 @@ export default function Home() {
   });
 
   useEffect(() => {
+    setTheme(localStorage.getItem("agromind_theme") === "black" ? "black" : "green");
     if (!supabase) {
       setLoginError("Authentication is not configured.");
       return;
@@ -59,6 +61,12 @@ export default function Home() {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => setSessionStarted(Boolean(session)));
     return () => data.subscription.unsubscribe();
   }, []);
+
+  function toggleTheme() {
+    const next = theme === "green" ? "black" : "green";
+    setTheme(next);
+    localStorage.setItem("agromind_theme", next);
+  }
 
   async function enterSession(event: FormEvent) {
     event.preventDefault();
@@ -198,11 +206,14 @@ export default function Home() {
 
   if (!sessionStarted) {
     return (
-      <main className="landing-shell">
+      <main className={`landing-shell ${theme === "black" ? "premium-black" : ""}`}>
         <nav className="landing-nav">
           <button className="landing-brand" type="button" onClick={() => document.querySelector("#landing-auth")?.scrollIntoView()}><span>AM</span><strong>AgroMind</strong></button>
           <div className="landing-links"><button type="button">Home</button><button type="button" onClick={() => document.querySelector("#landing-services")?.scrollIntoView()}>Services</button><button type="button" onClick={() => document.querySelector("#landing-agents")?.scrollIntoView()}>AI Agents</button><button type="button" onClick={() => document.querySelector("#landing-about")?.scrollIntoView()}>About</button></div>
           <button className="landing-login" type="button" onClick={() => document.querySelector("#landing-auth")?.scrollIntoView()}>Sign in <span>→</span></button>
+          <button className="theme-toggle" type="button" onClick={toggleTheme} aria-label="Switch premium theme">
+            {theme === "black" ? "Light" : "Black"}
+          </button>
         </nav>
         <section className="landing-hero">
           <div className="landing-shade" />
@@ -255,7 +266,7 @@ export default function Home() {
   ];
 
   return (
-    <main className="dashboard-shell">
+    <main className={`dashboard-shell ${theme === "black" ? "premium-black" : ""}`}>
       <aside className="dashboard-sidebar">
         <div className="dashboard-brand"><span className="brandmark">AM</span><strong>AgroMind</strong></div>
         <nav>
@@ -271,7 +282,10 @@ export default function Home() {
       <section className="dashboard-content">
         <header className="dashboard-header">
           <div><span className="eyebrow">AgroMind workspace</span><h1>{navItems.find((item) => item.id === view)?.label}</h1></div>
-          <button className="header-action" onClick={() => setView("field")}>New analysis</button>
+          <div className="dashboard-header-actions">
+            <button className="theme-toggle-dashboard" type="button" onClick={toggleTheme}>{theme === "black" ? "Black" : "Green"} theme</button>
+            <button className="header-action" onClick={() => setView("field")}>New analysis</button>
+          </div>
         </header>
 
         <div className="view-stage" key={view}>
