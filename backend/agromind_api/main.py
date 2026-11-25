@@ -1,12 +1,15 @@
 import csv
 import io
+import logging
 import os
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="AgroMind Agent API",
@@ -38,7 +41,7 @@ class AgentResult(BaseModel):
     agent: str
     status: str
     summary: str
-    confidence: int
+    confidence: int | None = None
 
 
 class DiseaseDiagnosis(BaseModel):
@@ -49,6 +52,13 @@ class DiseaseDiagnosis(BaseModel):
     symptoms: list[str]
     recommendations: list[str]
     follow_up: list[str]
+
+
+class SpecialistPrompt(TypedDict):
+    agent: Literal["Disease", "Irrigation", "Resources", "Market"]
+    image: str | None
+    prompt: str
+    fallback: str
 
 
 AUTHORIZED_DOMAINS = {
@@ -94,7 +104,7 @@ SOURCE_REGISTRY = [
 
 AGENT_REGISTRY = {
     "Disease": {"domain": "disease", "sources": ["Krishi DSS"]},
-    "Irrigation": {"domain": "weather", "sources": ["Open-Meteo", "IMD gateway"]},
+    "Irrigation": {"domain": "weather", "sources": ["Open-Meteo"]},
     "Resources": {"domain": "soil", "sources": ["Soil Health Card"]},
     "Market": {
         "domain": "market",
@@ -103,24 +113,41 @@ AGENT_REGISTRY = {
 }
 
 
-async def gemini(prompt: str) -> str | None:
+async def gemini(prompt: str, image: str | None = None) -> str | None:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return None
 
     model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    parts: list[dict[str, Any]] = [{"text": prompt}]
+    if image and image.startswith("data:"):
+        metadata, separator, image_data = image.partition(",")
+        mime_type = metadata[5:].split(";", 1)[0]
+        if separator and ";base64" in metadata and mime_type.startswith("image/"):
+            parts.append(
+                {
+                    "inlineData": {
+                        "mimeType": mime_type,
+                        "data": image_data,
+                    }
+                }
+            )
     payload = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": [{"role": "user", "parts": parts}],
         "generationConfig": {"temperature": 0.1, "maxOutputTokens": 300},
     }
 
-    async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.post(
-            url,
-            headers={"x-goog-api-key": api_key},
-            json=payload,
-        )
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(
+                url,
+                headers={"x-goog-api-key": api_key},
+                json=payload,
+            )
+    except httpx.RequestError as exc:
+        logger.warning("Gemini request failed (%s)", type(exc).__name__)
+        return None
     if response.status_code != 200:
         return None
 
@@ -132,27 +159,31 @@ async def gemini(prompt: str) -> str | None:
 
 
 async def get_weather(district: str) -> dict[str, Any] | None:
-    async with httpx.AsyncClient(timeout=15) as client:
-        geo = await client.get(
-            "https://geocoding-api.open-meteo.com/v1/search",
-            params={"name": district, "count": 1, "countryCode": "IN"},
-        )
-        if geo.status_code != 200:
-            return None
-        place = (geo.json().get("results") or [None])[0]
-        if not place:
-            return None
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            geo = await client.get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                params={"name": district, "count": 1, "countryCode": "IN"},
+            )
+            if geo.status_code != 200:
+                return None
+            place = (geo.json().get("results") or [None])[0]
+            if not place:
+                return None
 
-        weather = await client.get(
-            "https://api.open-meteo.com/v1/forecast",
-            params={
-                "latitude": place["latitude"],
-                "longitude": place["longitude"],
-                "daily": "precipitation_probability_max",
-                "forecast_days": 3,
-                "timezone": "auto",
-            },
-        )
+            weather = await client.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": place["latitude"],
+                    "longitude": place["longitude"],
+                    "daily": "precipitation_probability_max",
+                    "forecast_days": 3,
+                    "timezone": "auto",
+                },
+            )
+    except httpx.RequestError as exc:
+        logger.warning("Weather request failed (%s)", type(exc).__name__)
+        return None
     if weather.status_code != 200:
         return None
     probabilities = weather.json().get("daily", {}).get(
@@ -176,17 +207,21 @@ async def get_authorized_market(crop: str, district: str) -> dict[str, Any] | No
     )
     url = f"https://api.data.gov.in/resource/{resource}"
 
-    async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.get(
-            url,
-            params={
-                "api-key": api_key,
-                "format": "json",
-                "filters[commodity]": crop,
-                "filters[district]": district,
-                "limit": 10,
-            },
-        )
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(
+                url,
+                params={
+                    "api-key": api_key,
+                    "format": "json",
+                    "filters[commodity]": crop,
+                    "filters[district]": district,
+                    "limit": 10,
+                },
+            )
+    except httpx.RequestError as exc:
+        logger.warning("Market data request failed (%s)", type(exc).__name__)
+        return None
     if response.status_code != 200:
         return None
 
@@ -227,8 +262,12 @@ async def get_production_index(crop: str) -> dict[str, Any] | None:
         "datafile/index_numbers_of_agricultural_production_and_productivity_"
         "2006-07_2009.csv",
     )
-    async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.get(url)
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(url)
+    except httpx.RequestError as exc:
+        logger.warning("Production index request failed (%s)", type(exc).__name__)
+        return None
     if response.status_code != 200:
         return None
 
@@ -280,14 +319,22 @@ async def get_authorized_evidence(
     api_key = os.getenv(env_key)
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.post(url, headers=headers, json=payload)
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(url, headers=headers, json=payload)
+    except httpx.RequestError as exc:
+        logger.warning("Authorized evidence request failed (%s)", type(exc).__name__)
+        return None
     if response.status_code != 200:
         return None
     return response.json()
 
 
-def orchestrate(field: FieldInput, agents: list[AgentResult]) -> tuple[list[str], list[str]]:
+def orchestrate(
+    field: FieldInput,
+    agents: list[AgentResult],
+    market_available: bool | None = None,
+) -> tuple[list[str], list[str]]:
     summaries = {item.agent: item.summary.lower() for item in agents}
     conflicts: list[str] = []
     plan: list[str] = []
@@ -317,7 +364,7 @@ def orchestrate(field: FieldInput, agents: list[AgentResult]) -> tuple[list[str]
             "Irrigation evidence conflict: depleted moisture but substantial forecast rainfall"
         )
     market_summary = summaries.get("Market")
-    if market_summary is not None and "mandi" not in market_summary:
+    if market_summary is not None and market_available is False:
         conflicts.append("Market evidence incomplete: live district mandi comparison unavailable")
 
     return plan[:4], conflicts
@@ -341,7 +388,8 @@ async def analyze_crop(field: FieldInput) -> dict[str, Any]:
     diagnosis = await gemini(
         "Analyze this crop condition. Return plain structured JSON only with "
         "crop_name, disease_name, confidence, severity, symptoms, recommendations, "
-        "and follow_up. Do not invent a confirmed diagnosis and do not prescribe doses. "
+        "and follow_up. Use any supplied image as visual evidence, distinguish symptoms "
+        "from confirmed disease, and do not prescribe doses. "
         f"Crop={field.crop}; district={field.district}; symptoms={field.issue}.",
         field.image,
     )
@@ -443,25 +491,56 @@ async def source_status() -> dict[str, Any]:
 
 @app.post("/api/analyze")
 async def analyze(field: FieldInput) -> dict[str, Any]:
-    weather, market, index = await _gather_core_evidence(field)
-    soil = await get_authorized_evidence(
-        "SOIL_HEALTH_API_URL",
-        "SOIL_HEALTH_API_KEY",
-        {"district": field.district, "soilType": field.soil},
-    )
-    disease = await get_authorized_evidence(
-        "KRISHI_DSS_API_URL",
-        "KRISHI_DSS_API_KEY",
-        {"crop": field.crop, "district": field.district},
-    )
+    specialist_only = field.specialist in AGENT_REGISTRY
+    weather: dict[str, Any] | None = None
+    market: dict[str, Any] | None = None
+    index: dict[str, Any] | None = None
+    soil: dict[str, Any] | None = None
+    disease: dict[str, Any] | None = None
 
-    specialists = [
+    if field.specialist == "Disease":
+        disease = await get_authorized_evidence(
+            "KRISHI_DSS_API_URL",
+            "KRISHI_DSS_API_KEY",
+            {"crop": field.crop, "district": field.district},
+        )
+    elif field.specialist == "Irrigation":
+        weather = await get_weather(field.district)
+    elif field.specialist == "Resources":
+        soil = await get_authorized_evidence(
+            "SOIL_HEALTH_API_URL",
+            "SOIL_HEALTH_API_KEY",
+            {"district": field.district, "soilType": field.soil},
+        )
+    elif field.specialist == "Market":
+        import asyncio
+
+        market, index = await asyncio.gather(
+            get_authorized_market(field.crop, field.district),
+            get_production_index(field.crop),
+        )
+    else:
+        weather, market, index = await _gather_core_evidence(field)
+        soil = await get_authorized_evidence(
+            "SOIL_HEALTH_API_URL",
+            "SOIL_HEALTH_API_KEY",
+            {"district": field.district, "soilType": field.soil},
+        )
+        disease = await get_authorized_evidence(
+            "KRISHI_DSS_API_URL",
+            "KRISHI_DSS_API_KEY",
+            {"crop": field.crop, "district": field.district},
+        )
+
+    specialists: list[SpecialistPrompt] = [
         {
             "agent": "Disease",
+            "image": field.image,
             "prompt": (
                 "You are the independent Disease Detection Agent. "
                 f"crop={field.crop}; issue={field.issue}; district={field.district}; "
                 f"disease_evidence={disease or 'not connected'}. "
+                "Use the supplied image as visual evidence when available. "
                 "Return <=45 words: likely causes, two checks, confidence, escalation threshold."
             ),
             "fallback": (
@@ -472,6 +551,7 @@ async def analyze(field: FieldInput) -> dict[str, Any]:
         },
         {
             "agent": "Irrigation",
+            "image": None,
             "prompt": (
                 "You are the independent Smart Irrigation Agent. "
                 f"crop={field.crop}; soil={field.soil}; moisture={field.moisture}%; "
@@ -486,6 +566,7 @@ async def analyze(field: FieldInput) -> dict[str, Any]:
         },
         {
             "agent": "Resources",
+            "image": None,
             "prompt": (
                 "You are the independent Resource Optimization Agent. "
                 f"crop={field.crop}; soil={field.soil}; district={field.district}; "
@@ -500,6 +581,7 @@ async def analyze(field: FieldInput) -> dict[str, Any]:
         },
         {
             "agent": "Market",
+            "image": None,
             "prompt": (
                 "You are the independent Market Intelligence Agent. "
                 f"crop={field.crop}; district={field.district}; "
@@ -526,32 +608,42 @@ async def analyze(field: FieldInput) -> dict[str, Any]:
 
     agents: list[AgentResult] = []
     for specialist in specialists:
-        text = await gemini(specialist["prompt"])
+        text = await gemini(specialist["prompt"], specialist["image"])
         agents.append(
             AgentResult(
                 agent=specialist["agent"],
                 status="ok" if text else "fallback",
                 summary=text or specialist["fallback"],
-                confidence=72 if text else 55,
+                confidence=None,
             )
         )
 
-    orchestrator_prompt = (
-        "You are the central agricultural orchestrator. Reconcile these independent outputs "
-        f"and produce 3 concise actions and 1 warning: {agents}. "
-        "Require local agronomist, soil-lab, and farmer approval."
-    )
-    orchestrator_text = await gemini(orchestrator_prompt)
-    deterministic_plan, conflicts = orchestrate(field, agents)
-    plan = deterministic_plan
-    if orchestrator_text:
-        orchestrated = [
-            line.strip(" -*0123456789.)")
-            for line in orchestrator_text.replace("\n", " ").split(". ")
-            if line.strip()
+    conflicts: list[str] = []
+    if specialist_only:
+        plan = [
+            f"{field.specialist} specialist result is available above. "
+            "Run full collaboration for a coordinated plan."
         ]
-        if orchestrated:
-            plan = (orchestrated + plan)[:4]
+    else:
+        orchestrator_prompt = (
+            "You are the central agricultural orchestrator. Reconcile these independent outputs "
+            f"and produce 3 concise actions and 1 warning: {agents}. "
+            "Require local agronomist, soil-lab, and farmer approval."
+        )
+        orchestrator_text = await gemini(orchestrator_prompt)
+        plan, conflicts = orchestrate(
+            field,
+            agents,
+            market_available=bool(market and market.get("recordCount")),
+        )
+        if orchestrator_text:
+            orchestrated = [
+                line.strip(" -*0123456789.)")
+                for line in orchestrator_text.replace("\n", " ").split(". ")
+                if line.strip()
+            ]
+            if orchestrated:
+                plan = (orchestrated + plan)[:4]
 
     sources = [
         {
@@ -575,14 +667,30 @@ async def analyze(field: FieldInput) -> dict[str, Any]:
             "status": "authorized" if index else "illustrative",
         },
     ]
+    source_indices_by_specialist = {
+        "Disease": (1,),
+        "Irrigation": (0,),
+        "Resources": (2,),
+        "Market": (3, 4),
+    }
+    if field.specialist is not None:
+        source_indices = source_indices_by_specialist.get(field.specialist)
+        if source_indices is not None:
+            sources = [sources[index] for index in source_indices]
 
+    warnings = [
+        "No treatment, irrigation release, or fertilizer dose is applied automatically.",
+        "Local agronomic verification is required before consequential action.",
+    ]
+    if specialist_only:
+        warnings.append(
+            f"Only the {field.specialist} specialist ran; cross-agent orchestration was skipped."
+        )
+    warnings.extend(conflicts)
     return {
         "plan": plan,
-        "warnings": [
-            "No treatment, irrigation release, or fertilizer dose is applied automatically.",
-            "Local agronomic verification is required before consequential action.",
-            *conflicts,
-        ],
+        "warnings": warnings,
+        "orchestratorRan": not specialist_only,
         "agents": [agent.model_dump() for agent in agents],
         "sources": sources,
         "evidence": {
