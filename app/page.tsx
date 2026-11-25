@@ -5,6 +5,7 @@ import { supabase } from "./lib/supabase";
 
 type View = "overview" | "disease" | "field" | "collaboration" | "evidence" | "assistant";
 type AgentResult = { agent: string; status: "idle" | "ok" | "fallback"; summary: string; confidence: number | null };
+type ChatMessage = { role: "assistant" | "user"; text: string };
 type RunResult = {
   plan: string[];
   warnings: string[];
@@ -39,11 +40,17 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [activeAgent, setActiveAgent] = useState("Disease");
   const [result, setResult] = useState(emptyResult);
+  const [analysisFieldSnapshot, setAnalysisFieldSnapshot] = useState("");
   const [imagePreview, setImagePreview] = useState("");
   const [imageData, setImageData] = useState("");
+  const [imageError, setImageError] = useState("");
   const [chatInput, setChatInput] = useState("");
-  const [chatMessages, setChatMessages] = useState([
-    { role: "assistant", text: "Ask about this field, a symptom, irrigation, soil or a mandi." },
+  const [chatSending, setChatSending] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      role: "assistant",
+      text: "Ask about crop symptoms, likely causes, what to check next, irrigation, soil, harvest, or market decisions. Add your crop and district above, or upload a clear photo. I’ll separate likely causes from confirmed facts and give practical next steps.",
+    },
   ]);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatPosition, setChatPosition] = useState<{ x: number; y: number } | null>(null);
@@ -129,18 +136,33 @@ export default function Home() {
 
   function selectImage(file?: File) {
     if (!file) return;
-    if (!file.type.startsWith("image/")) return;
-    if (file.size > 8 * 1024 * 1024) {
-      setLoginError("Image must be smaller than 8 MB.");
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setImageData("");
+      setImagePreview("");
+      setImageError("Use a JPEG, PNG, or WebP crop image.");
       return;
     }
+    if (file.size > 8 * 1024 * 1024) {
+      setImageData("");
+      setImagePreview("");
+      setImageError("Image must be smaller than 8 MB.");
+      return;
+    }
+    setImageError("");
     const reader = new FileReader();
     reader.onload = () => {
       const value = String(reader.result);
       setImageData(value);
       setImagePreview(value);
     };
+    reader.onerror = () => setImageError("The selected image could not be read. Please try another file.");
     reader.readAsDataURL(file);
+  }
+
+  function removeImage() {
+    setImageData("");
+    setImagePreview("");
+    setImageError("");
   }
 
   async function runAgents(event?: FormEvent) {
@@ -161,13 +183,16 @@ export default function Home() {
         body: JSON.stringify({ ...form, image: imageData }),
       });
       if (!response.ok) throw new Error("Agent service unavailable");
-      setResult(await response.json());
+      const data: RunResult = await response.json();
+      setResult(data);
+      setAnalysisFieldSnapshot(JSON.stringify(form));
       setActiveAgent("Orchestrator");
     } catch {
       setResult({
         ...emptyResult,
         warnings: ["The agent service could not be reached. No simulated decision is shown."],
       });
+      setAnalysisFieldSnapshot("");
     } finally {
       window.clearInterval(timer);
       setLoading(false);
@@ -186,14 +211,16 @@ export default function Home() {
       });
       if (!response.ok) throw new Error("Agent service unavailable");
       const data: RunResult = await response.json();
+      const sameField = analysisFieldSnapshot === JSON.stringify(form);
       setResult((current) => ({
         ...data,
-        agents: current.agents.map((agent) =>
+        agents: (sameField ? current.agents : emptyResult.agents).map((agent) =>
           agent.agent === agentName
             ? data.agents.find((item) => item.agent === agentName) || agent
             : agent,
         ),
       }));
+      setAnalysisFieldSnapshot(JSON.stringify(form));
     } catch {
       setResult((current) => ({
         ...current,
@@ -207,19 +234,76 @@ export default function Home() {
   async function sendChat(event: FormEvent) {
     event.preventDefault();
     const message = chatInput.trim();
-    if (!message) return;
+    if (!message || chatSending) return;
     setChatInput("");
-    setChatMessages((current) => [...current, { role: "user", text: message }]);
+    const history = chatMessages.slice(-8);
+    const hasCurrentAnalysis = analysisFieldSnapshot === JSON.stringify(form);
+    setChatMessages((current) => [...current, { role: "user", text: message }].slice(-50));
+    setChatSending(true);
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, field: form }),
+        body: JSON.stringify({
+          message,
+          history,
+          language,
+          field: {
+            crop: form.crop,
+            district: form.district,
+            soilType: form.soil,
+            moisture: form.moisture,
+            recentRain: form.rain,
+            issue: form.issue,
+          },
+          image: imageData || undefined,
+          analysis: hasCurrentAnalysis && result.agents.some((agent) => agent.status !== "idle")
+            ? {
+                agents: result.agents
+                  .filter((agent) => agent.status !== "idle")
+                  .map(({ agent, status, summary }) => ({ agent, status, summary })),
+                plan: result.orchestratorRan ? result.plan : [],
+                warnings: result.warnings,
+                sources: result.sources.map(({ name, status }) => ({ name, status })),
+              }
+            : undefined,
+        }),
       });
-      const data = await response.json();
-      setChatMessages((current) => [...current, { role: "assistant", text: data.reply || "No verified response was available." }]);
-    } catch {
-      setChatMessages((current) => [...current, { role: "assistant", text: "The assistant could not connect." }]);
+      const data: unknown = await response.json();
+      const responseBody =
+        typeof data === "object" && data !== null
+          ? (data as { reply?: unknown; mode?: unknown; notice?: unknown; error?: unknown })
+          : {};
+      if (!response.ok) {
+        throw new Error(
+          typeof responseBody.error === "string"
+            ? responseBody.error
+            : `Chat request failed (${response.status}).`,
+        );
+      }
+      if (typeof responseBody.reply !== "string" || !responseBody.reply.trim()) {
+        throw new Error("The assistant returned an empty response. Please try again.");
+      }
+      const notice =
+        typeof responseBody.notice === "string" && responseBody.notice.trim()
+          ? `\n\n${responseBody.mode === "offline" ? "OFFLINE GUIDANCE" : "NOTICE"}: ${responseBody.notice}`
+          : "";
+      setChatMessages((current) =>
+        [...current, { role: "assistant", text: `${responseBody.reply}${notice}` }].slice(-50),
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unexpected chat error.";
+      setChatMessages((current) =>
+        [
+          ...current,
+          {
+            role: "assistant",
+            text: `I couldn't send that request: ${detail} Check your connection and try again.`,
+          },
+        ].slice(-50),
+      );
+    } finally {
+      setChatSending(false);
     }
   }
 
@@ -265,17 +349,36 @@ export default function Home() {
           onPointerMove={moveChatDrag}
           onPointerUp={stopChatDrag}
         >
-          <div><span className="chat-avatar">AM</span><div><strong>AgroMind Assistant</strong><small>Live agricultural copilot</small></div></div>
+          <div><span className="chat-avatar">AM</span><div><strong>AgroMind Assistant</strong><small>Field-aware crop guidance</small></div></div>
           <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => setChatOpen(false)} aria-label="Close assistant">×</button>
         </header>
-        <div className="floating-chat-messages">
+        <div className="floating-chat-messages" aria-live="polite">
+          {(imagePreview || imageError) && (
+            <div className="chat-attachment-note">
+              {imageError || "Crop photo will be included with each question until removed."}
+              {imagePreview && <button type="button" onClick={removeImage}>Remove</button>}
+            </div>
+          )}
           {chatMessages.map((message, index) => (
             <div className={`chat-message ${message.role}`} key={index}>{message.text}</div>
           ))}
+          {chatSending && <div className="chat-message assistant">Checking your field context…</div>}
         </div>
         <form className="floating-chat-form" onSubmit={sendChat}>
-          <input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="Ask about your field..." />
-          <button type="submit" aria-label="Send message">↗</button>
+          <label className="chat-attach" title="Attach a crop photo">
+            <span aria-hidden="true">＋</span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              aria-label="Attach a crop photo"
+              onChange={(event) => {
+                selectImage(event.currentTarget.files?.[0]);
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+          <input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="Ask about your field..." disabled={chatSending} />
+          <button type="submit" aria-label="Send message" disabled={chatSending || !chatInput.trim()}>↗</button>
         </form>
       </aside>
     ) : (
@@ -455,7 +558,8 @@ export default function Home() {
             <div className="two-column">
               <article className="panel">
                 <div className="panel-title"><span className="eyebrow">Vision agent</span><h2>Crop disease scan</h2></div>
-                <label className="image-upload">{imagePreview ? <img src={imagePreview} alt="Crop leaf preview" /> : <><strong>Upload a crop leaf image</strong><small>JPG or PNG · close, clear symptoms preferred</small></>}<input type="file" accept="image/*" capture="environment" onChange={(event) => selectImage(event.target.files?.[0])} /></label>
+                <label className="image-upload">{imagePreview ? <img src={imagePreview} alt="Crop leaf preview" /> : <><strong>Upload a crop leaf image</strong><small>JPG, PNG, or WebP · close, clear symptoms preferred</small></>}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => selectImage(event.target.files?.[0])} /></label>
+                {imageError && <p className="login-error">{imageError}</p>}
                 <div className="sample-strip">
                   <button type="button" onClick={() => update("issue", "Yellow-brown leaf spots with possible fungal spread")}>Tomato spotting</button>
                   <button type="button" onClick={() => update("issue", "Dark leaf lesions after prolonged humidity")}>Blight pattern</button>
@@ -571,8 +675,41 @@ export default function Home() {
           {view === "assistant" && (
             <article className="panel chat-view">
               <div className="panel-title"><span className="eyebrow">Field copilot</span><h2>AgroMind AI Assistant</h2></div>
-              <div className="chat-log">{chatMessages.map((message, index) => <div className={`chat-message ${message.role}`} key={index}>{message.text}</div>)}</div>
-              <form className="chat-form" onSubmit={sendChat}><input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="Ask about the current field..." /><button>Send</button></form>
+              <div className="chat-log" aria-live="polite">
+                {(imagePreview || imageError) && (
+                  <div className="chat-attachment-note">
+                    {imageError || "Crop photo will be included with each question until removed."}
+                    {imagePreview && <button type="button" onClick={removeImage}>Remove</button>}
+                  </div>
+                )}
+                <div className="chat-suggestions">
+                  {[
+                    "What could be causing these symptoms?",
+                    "What should I inspect and do first?",
+                    "How can I verify a safe crop treatment?",
+                  ].map((prompt) => (
+                    <button type="button" key={prompt} onClick={() => setChatInput(prompt)}>{prompt}</button>
+                  ))}
+                </div>
+                {chatMessages.map((message, index) => <div className={`chat-message ${message.role}`} key={index}>{message.text}</div>)}
+                {chatSending && <div className="chat-message assistant">Checking your field context…</div>}
+              </div>
+              <form className="chat-form" onSubmit={sendChat}>
+                <input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="Ask about the current field..." disabled={chatSending} />
+                <label className="chat-attach" title="Attach a crop photo">
+                  <span aria-hidden="true">＋</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    aria-label="Attach a crop photo"
+                    onChange={(event) => {
+                      selectImage(event.currentTarget.files?.[0]);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                <button disabled={chatSending || !chatInput.trim()}>{chatSending ? "Checking…" : "Send"}</button>
+              </form>
             </article>
           )}
         </div>

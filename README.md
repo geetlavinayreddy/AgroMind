@@ -8,6 +8,8 @@ The application includes a Next.js and React web interface, a FastAPI backend, o
 
 - Independent Disease, Irrigation, Resources, and Market specialists
 - Crop image and field-context inputs
+- Conversation-aware assistant that can use recent chat turns, field details, crop photos, and completed specialist summaries to explain likely causes, checks, prevention, and next steps
+- Treatment guidance that avoids unverified pesticide prescriptions and directs product-specific checks to licensed local agricultural retailers or extension services
 - Central plan and evidence-source status
 - Optional Open-Meteo weather and configured government data connections
 - Optional Supabase authentication
@@ -59,6 +61,8 @@ All integrations are optional. Configure only the services you use:
 - `AGROMIND_PYTHON_API_URL` to connect the web app to the Python API
 
 If a source is not configured, its evidence is reported as unavailable; confirm recommendations with local agricultural experts before taking consequential action.
+
+The chat assistant uses `GEMINI_API_KEY` for generated answers. If the key or model service is unavailable, the chat provides clearly labeled, general offline triage instead; offline guidance does not verify live sources, market prices, or product labels.
 
 ## Tests and checks
 
