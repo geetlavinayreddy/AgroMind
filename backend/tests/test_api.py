@@ -104,3 +104,20 @@ def test_specialist_only_run(monkeypatch) -> None:
     )
     assert response.status_code == 200
     assert [agent["agent"] for agent in response.json()["agents"]] == ["Irrigation"]
+
+
+def test_invalid_specialist_is_rejected() -> None:
+    response = client.post(
+        "/api/analyze",
+        json={
+            "crop": "Tomato",
+            "district": "Anantapur",
+            "soil": "Red sandy loam",
+            "moisture": "22",
+            "rain": "18",
+            "issue": "Yellow-brown spots",
+            "specialist": "Unknown",
+        },
+    )
+
+    assert response.status_code == 422
