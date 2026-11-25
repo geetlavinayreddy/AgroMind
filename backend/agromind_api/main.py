@@ -1,7 +1,7 @@
 import csv
 import io
 import os
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -31,7 +31,7 @@ class FieldInput(BaseModel):
     rain: str = Field(min_length=1, max_length=20)
     issue: str = Field(min_length=1, max_length=300)
     image: str | None = None
-    specialist: str | None = Field(default=None, max_length=30)
+    specialist: Literal["Disease", "Irrigation", "Resources", "Market"] | None = None
 
 
 class AgentResult(BaseModel):
