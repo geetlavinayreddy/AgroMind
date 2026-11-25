@@ -1,3 +1,6 @@
+import json
+
+import httpx
 from fastapi.testclient import TestClient
 
 from agromind_api.main import app
@@ -19,7 +22,7 @@ def test_analyze_returns_all_specialists(monkeypatch) -> None:
     async def no_external_evidence(*args, **kwargs):
         return None
 
-    async def no_gemini(prompt):
+    async def no_gemini(prompt, image=None):
         return None
 
     monkeypatch.setattr("agromind_api.main._gather_core_evidence", no_core_evidence)
@@ -121,3 +124,83 @@ def test_invalid_specialist_is_rejected() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_analyze_crop_includes_image_in_gemini_request(monkeypatch) -> None:
+    image = "data:image/jpeg;base64,aGVsbG8="
+    requests = []
+    diagnosis = (
+        '{"crop_name":"Tomato","disease_name":"Unconfirmed","confidence":"Low",'
+        '"severity":"Unknown","symptoms":["spots"],'
+        '"recommendations":["Compare symptoms"],"follow_up":["Consult an expert"]}'
+    )
+
+    async def capture_request(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={"candidates": [{"content": {"parts": [{"text": diagnosis}]}}]},
+        )
+
+    original_async_client = httpx.AsyncClient
+
+    def mock_async_client(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(capture_request)
+        return original_async_client(*args, **kwargs)
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr("agromind_api.main.httpx.AsyncClient", mock_async_client)
+
+    response = client.post(
+        "/api/analyze-crop",
+        json={
+            "crop": "Tomato",
+            "district": "Anantapur",
+            "soil": "Red sandy loam",
+            "moisture": "22",
+            "rain": "18",
+            "issue": "Yellow-brown spots",
+            "image": image,
+        },
+    )
+
+    assert response.status_code == 200
+    assert requests[0]["contents"][0]["parts"][1] == {
+        "inlineData": {"mimeType": "image/jpeg", "data": "aGVsbG8="}
+    }
+
+
+def test_analyze_passes_image_to_disease_agent(monkeypatch) -> None:
+    async def no_core_evidence(field):
+        return None, None, None
+
+    async def no_external_evidence(*args, **kwargs):
+        return None
+
+    calls = []
+
+    async def no_gemini(prompt, image=None):
+        calls.append((prompt, image))
+        return None
+
+    monkeypatch.setattr("agromind_api.main._gather_core_evidence", no_core_evidence)
+    monkeypatch.setattr("agromind_api.main.get_authorized_evidence", no_external_evidence)
+    monkeypatch.setattr("agromind_api.main.gemini", no_gemini)
+
+    image = "data:image/jpeg;base64,aGVsbG8="
+    response = client.post(
+        "/api/analyze",
+        json={
+            "crop": "Tomato",
+            "district": "Anantapur",
+            "soil": "Red sandy loam",
+            "moisture": "22",
+            "rain": "18",
+            "issue": "Yellow-brown spots",
+            "image": image,
+            "specialist": "Disease",
+        },
+    )
+
+    assert response.status_code == 200
+    assert calls[0][1] == image
