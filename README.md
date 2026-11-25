@@ -1,6 +1,6 @@
 # AgroMind
 
-AgroMind is an agricultural intelligence portal that brings together crop-health, irrigation, soil-resource, and market specialists. A central orchestrator combines their results into a field plan, while keeping evidence status and uncertainty visible.
+AgroMind is an Agricultural Intelligence portal that brings together crop-health, irrigation, soil-resource, and market specialists. A central orchestrator combines their results into a field plan, while keeping evidence status and uncertainty Visible.
 
 The application includes a Next.js and React web interface, a FastAPI backend, optional Gemini-powered responses, and optional connections to authorized weather and agricultural data sources. When external services are unavailable or not configured, the app provides limited fallback guidance rather than claiming that live evidence was received.
 
