@@ -8,11 +8,11 @@
 - AgriLive: voice and vision assistant with structured farm advisories
 - OSI OS: offline-first sensing and zone-based irrigation
 
-## Remove
+## Remove  
 
-- Generic “waiting for input” language in completed agent cards
+- Generic “waiting for Input” language in completed agent cards
 - External-source lists presented as trained agent knowledge
-- Simulated values that could be mistaken for live measurements
+- Simulated values that could be Mistaken for live measurements
 - Automatic irrigation, treatment or market actions
 
 ## Add
