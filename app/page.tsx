@@ -238,7 +238,8 @@ export default function Home() {
     setChatInput("");
     const history = chatMessages.slice(-8);
     const hasCurrentAnalysis = analysisFieldSnapshot === JSON.stringify(form);
-    setChatMessages((current) => [...current, { role: "user", text: message }].slice(-50));
+    const userMessage: ChatMessage = { role: "user", text: message };
+    setChatMessages((current) => [...current, userMessage].slice(-50));
     setChatSending(true);
     try {
       const response = await fetch("/api/chat", {
@@ -288,20 +289,18 @@ export default function Home() {
         typeof responseBody.notice === "string" && responseBody.notice.trim()
           ? `\n\n${responseBody.mode === "offline" ? "OFFLINE GUIDANCE" : "NOTICE"}: ${responseBody.notice}`
           : "";
-      setChatMessages((current) =>
-        [...current, { role: "assistant", text: `${responseBody.reply}${notice}` }].slice(-50),
-      );
+      const assistantMessage: ChatMessage = {
+        role: "assistant",
+        text: `${responseBody.reply}${notice}`,
+      };
+      setChatMessages((current) => [...current, assistantMessage].slice(-50));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unexpected chat error.";
-      setChatMessages((current) =>
-        [
-          ...current,
-          {
-            role: "assistant",
-            text: `I couldn't send that request: ${detail} Check your connection and try again.`,
-          },
-        ].slice(-50),
-      );
+      const errorMessage: ChatMessage = {
+        role: "assistant",
+        text: `I couldn't send that request: ${detail} Check your connection and try again.`,
+      };
+      setChatMessages((current) => [...current, errorMessage].slice(-50));
     } finally {
       setChatSending(false);
     }
